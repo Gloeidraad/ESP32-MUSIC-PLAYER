@@ -180,6 +180,7 @@ class SettingsClass {
     uint8_t  FirstSong;
     uint8_t  NewSourceAF;
     uint8_t  NewTrack;
+    //uint8_t  InitDAC;
     uint8_t  WebTitleReceived;
 
   protected:

@@ -215,15 +215,10 @@ TimeStampClass TimeStamps;
 static bool ReadSetupFromCard(bool get_init_data = true) {
   if(Settings.NV.SourceAF == SET_SOURCE_WAVE_GEN) return true; // Nothing to load for waveform player
   #ifdef USE_SD_MMC
-    //pinMode(SD_MMC_D0, INPUT_PULLUP);
-    //Serial.println("OMT 1");
-    //SD_MMC.setPins(SD_MMC_CLK,SD_MMC_CMD, SD_MMC_D0);
-    //Serial.println("OMT 2");
-    //if(!SD_MMC.begin( "/sdcard", true, false, 20000)) {
     if(!SD_MMC.begin( "/sdcard", true)) {
-        Serial.println("Card Mount Failed, using SSID & Radio lists from EEPROM");
-        Settings.NoCard = 1;
-        return false;
+      Serial.println("Card Mount Failed, using SSID & Radio lists from EEPROM");
+      Settings.NoCard = 1;
+      return false;
     }
   #else
     if (!SD.begin(PIN_SPI_SS, SPI, SPI_SD_SPEED)) {

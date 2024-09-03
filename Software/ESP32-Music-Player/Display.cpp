@@ -383,13 +383,24 @@ void DisplayClass::ShowFrequencies(void) {
 }
 #endif
 
-void DisplayClass::ShowVolume(void) {
+void DisplayClass::ShowVolume(uint8_t vol, uint8_t max) {
   char InfoString[22];
   InfoString[0] = 0;
   OLED.setline(STATUS_LINE1, 0); 
   OLED.setline(STATUS_LINE2, 0); 
-  sprintf(InfoString, "Volume: %d/%d", Settings.NV.Volume, Settings.NV.VolumeSteps);
+  sprintf(InfoString, "Volume: %d/%d", vol, max);
   OLED.puts_xy(0, STATUS_LINE2, InfoString, SSD1306_FONT_5X8);
+  //OLED.shift_row_down(STATUS_LINE2);
+}
+
+void DisplayClass::ShowVolume(void) {
+  ShowVolume(Settings.NV.Volume, Settings.NV.VolumeSteps);
+  //char InfoString[22];
+  //InfoString[0] = 0;
+  //OLED.setline(STATUS_LINE1, 0); 
+  //OLED.setline(STATUS_LINE2, 0); 
+  //sprintf(InfoString, "Volume: %d/%d", Settings.NV.Volume, Settings.NV.VolumeSteps);
+  //OLED.puts_xy(0, STATUS_LINE2, InfoString, SSD1306_FONT_5X8);
   //OLED.shift_row_down(STATUS_LINE2);
 }
 

@@ -55,6 +55,7 @@ class DisplayClass {
 
     //void ShowFrequencies(void);
     void ShowVolume(void);
+    void ShowVolume(uint8_t vol, uint8_t max);
 
     void loop(uint32_t timestamp);
 

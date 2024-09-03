@@ -138,7 +138,13 @@ static void avrc_metadata_callback(uint8_t attribute, const uint8_t *data) {
 
 static void bt_volumechange(int v) { 
   Serial.printf("bt_volumechange: %d\n",v);
-  Player.CheckBluetoothVolume(v);
+  v = Player.CheckBluetoothVolume(v);
+  for(int v2 = 1; v2 <= Settings.NV.VolumeSteps; v2++) {
+    if(Settings.GetLinVolume(v2, BLUETOOTH_VOLUME_MAX) >= v) {
+      Display.ShowVolume(v2, Settings.NV.VolumeSteps);
+      return;
+    }
+  }
 }
 
 //static bool address_validator(esp_bd_addr_t remote_bda) { return true; }
@@ -235,7 +241,6 @@ void PlayerClass::Start(bool autoplay) {
                                  #else
                                    _audio->setVolume(SET_VOLUME_DEFAULT);
                                  #endif
-                                 //Settings.InitDAC = 1;
                                  break;
     case SET_SOURCE_BLUETOOTH  : Display.ShowHelpLine("Setting up Bluetooth");
 #if ESP_IDF_VERSION_MAJOR == 5  // OMT: under development
@@ -354,7 +359,7 @@ void PlayerClass::SetVolume(int vol) {
   if(vol > Settings.NV.VolumeSteps) vol = Settings.NV.VolumeSteps;
   if(_audio != NULL)           _audio->setVolume(vol);
   if(_waveform_player != NULL) _waveform_player->Volume(Settings.GetLogVolume(WAVEFORM_VOLUME_MAX));
-  if(_a2dp_sink != NULL)       _a2dp_sink->set_volume(vol);
+  if(_a2dp_sink != NULL)       _a2dp_sink->set_volume(Settings.GetLinVolume(BLUETOOTH_VOLUME_MAX));
   //if(Settings.NV.Volume != vol) {
     Display.ShowVolume();
     Settings.NV.Volume = vol;
@@ -627,17 +632,20 @@ void PlayerClass::PauseResume(void) {
   }
 }
 
-void PlayerClass::CheckBluetoothVolume(int v) {
+uint8_t PlayerClass::CheckBluetoothVolume(int v) {
   if(_a2dp_sink != NULL)  { 
     #if 0
       _a2dp_sink->set_volume(BLUETOOTH_VOLUME_MAX);
     #else
       if(v < BLUETOOTH_VOLUME_MIN) { // a minimum volume is needed to run properly
-        _a2dp_sink->set_volume(BLUETOOTH_VOLUME_MIN);
+        v = BLUETOOTH_VOLUME_MIN;
+        _a2dp_sink->set_volume(v);
         Serial.println("Bluetooth zero or low volume detected");
       }
+      return v;
     #endif
   }
+  return BLUETOOTH_VOLUME_MAX;
 }
 
 //******************************************************//
