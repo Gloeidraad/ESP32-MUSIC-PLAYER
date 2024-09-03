@@ -10406,6 +10406,26 @@
 		)
 		(uuid "956b9d03-6953-491f-a635-38079673ab19")
 	)
+	(text_box "NOTE: Freenove ESP32-Wrover CAM Board V3.0 has an SD-Card connector on the module. You can use this slot instead of J4 or M3. J4, M3, R1, R2, R3 are not placed in that case. "
+		(exclude_from_sim no)
+		(at 248.92 76.2 0)
+		(size 33.02 10.16)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(fill
+			(type none)
+		)
+		(effects
+			(font
+				(face "Arial Narrow")
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "af71c021-1a88-4f55-a50a-49417ca28634")
+	)
 	(text_box "- Place M4,J7,J8 or J2 for line out on J7 & J8 or J2\n- Place M5,J3 for mono speaker on pins 1&2 of J3\n- Place M5,M6,J5,R9,R10 for stereo speakers on J3\nNote: It is not possible to use both types simultaneously.\n"
 		(exclude_from_sim no)
 		(at 41.91 59.69 0)
