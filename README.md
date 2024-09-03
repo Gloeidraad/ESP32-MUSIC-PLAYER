@@ -5,4 +5,4 @@ This is an MP3 player, Web-radio player, Bluetooth player, and simple waveform g
 
 This design is derived from my project "AM/FM-modulator-with-ESP32-module" (https://github.com/Gloeidraad/AMFM-modulator-with-ESP32-module). 
 
-The PCBS design has been made with KiCad 8.0. 
+The PCB design has been made with KiCad 8.0. 
