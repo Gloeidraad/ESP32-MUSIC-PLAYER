@@ -1,1 +1,66 @@
+This sketch has been built with Arduino IDE 2.3.2 and ESP32 board package 2.0.17.
 
+It should be no problem to use a newer or older IDE version, however these
+instructions are for the 2.3.2 version. Please not that the sketch will not run
+when compiled with ESP32 board package 3.0.0 or higher.
+
+Step 1: Download the Arduino IDE software from:
+        https://www.arduino.cc/en/software
+        (Possibly scroll down on the page for 2.3.2)
+ 
+Step 2: Open Arduino IDE and install the ESP32 packages:
+        https://randomnerdtutorials.com/installing-the-esp32-board-in-arduino-ide-windows-instructions/
+        (Remark: the few seconds they mentioned to install the package is actually a couple of minutes, so be patient)
+
+Step 3: Download the sketch, and make sure the whole
+        project is inside the directory ESP32-Music-Player
+        Open the directory and open project ESP32-Music-Player.ino
+        
+Step 4: Select the target board with menu:
+        Tools => Board "xxx" => ESP32 Arduino => ESP32 Wrover Kit (all versions)
+        
+Step 5: Select the needed partition scheme with menu:
+        Tools => Partition Scheme "xxx" => Huge APP (...)
+        
+Step 6: Switch on both “Show verbose output” checkboxes in menu:
+        File => Preferences => tab Settings
+        (Building the sketch takes a long time, so it is useful
+        to monitor the progress)
+        
+Step 7: Connect the USB cable to the ESP32 module and make sure that
+        the PC recognizes it as a serial port. If not, install the
+        drivers for the corresponding serial adapter, normally
+        CP2102,r CH340C, or CH9102
+         
+Step 8: Choose the port of the ESP32 module via menu:
+        Tools => Port
+         
+Step 9: To see the debug info, you can open a serial monitor:
+        Tools => Serial Monitor
+        And set the baud rate to 115200
+         
+Step 10: Compile and upload the sketch:
+         Sketch => Upload (or press the (->) button)
+         It will take a while to compile the whole sketch,
+         so have a little patience...
+         
+Step 11: You can monitor the messages from the sketch in the serial
+         monitor, as long as the USB cable is connected. In addition,
+         you can query some information by sending some simple commands.
+         Send a ? to get a list of the commands.
+
+Notes:
+
+I used the following libaries for the project: 
+ 
+https://github.com/schreibfaul1/ESP32-audioI2S/
+https://github.com/pschatzmann/ESP32-A2DP
+https://github.com/mathertel/OneButton
+
+I included those used directories directly in the project. In the previous version
+the libraries were installed separately, but it appeared that using a newer or older
+versions of a library can lead to errors or unwanted behavior. Therefore, working
+versions are included in the project (in subdirectory “src”). Please take care if
+you plan to replace them with a different version.
+          
+Please report if you encounter any problems with the libraries. 
