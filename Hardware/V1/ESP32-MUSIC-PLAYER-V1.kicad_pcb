@@ -8528,11 +8528,11 @@
 				)
 			)
 		)
-		(property ki_fp_filters "SolderJumper*Bridged12*")
+		(property ki_fp_filters "Jumper* TestPoint*3Pads* TestPoint*Bridge*")
 		(path "/6ca98d82-bebe-4abf-9674-7df3dac1c656")
 		(sheetname "Root")
 		(sheetfile "ESP32-MUSIC-PLAYER-V1.kicad_sch")
-		(attr through_hole)
+		(attr through_hole exclude_from_bom)
 		(fp_line
 			(start 1.33 1.27)
 			(end 1.33 6.41)
