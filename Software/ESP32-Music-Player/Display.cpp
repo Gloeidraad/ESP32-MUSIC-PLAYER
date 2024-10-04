@@ -411,6 +411,8 @@ void DisplayClass::ShowMenuString(uint8_t y, const char *s, uint8_t font) {
   }
 }
 
+uint8_t DisplayClass::MenuStringMax() { return SSD1306_Fonts[SSD1306_FONT_5X8_NARROW].u8LineLength; }
+
 void DisplayClass::ShowMenuStrings(const char *s1, const char *s2, const char *s3){
   ShowMenuString(MENU_LINE_1, s1, SSD1306_FONT_8X8);
   

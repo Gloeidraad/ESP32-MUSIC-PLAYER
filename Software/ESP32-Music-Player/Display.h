@@ -59,6 +59,8 @@ class DisplayClass {
 
     void loop(uint32_t timestamp);
 
+    uint8_t MenuStringMax();
+
   protected:
     void ShowLine(uint8_t y, const char *s, uint8_t font, bool no_queue = false);
  
