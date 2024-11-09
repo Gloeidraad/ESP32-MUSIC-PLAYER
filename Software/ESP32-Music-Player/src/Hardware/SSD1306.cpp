@@ -82,10 +82,12 @@
 #define SSD1306_SH1106_SETPAGEADDRESS(p)   (0xB0 | (p))  
  
 #define SSD1306_I2C_ADDRESS   0x3C  // on PIC: 0x78
+// Default speeds
+#define SSD1306_I2C_SPEED     400000    // 400 kHz according to dataheets
 #if SH1106_CONTROLLER
-  #define SSD1306_SPI_SPEED   4000000  // SH1106 = 4 MHz according to dataheets
+  #define SSD1306_SPI_SPEED   4000000   // SH1106 = 4 MHz according to dataheets
 #else
-  #define SSD1306_SPI_SPEED   20000000 // SSD1306 = 10 MHz according to dataheets
+  #define SSD1306_SPI_SPEED   10000000  // SSD1306 = 10 MHz according to dataheets
 #endif
 
 // Some shorthand helpers for font list
@@ -107,9 +109,33 @@
 #define delay_us(us)  delayMicroseconds(us)
 #define delay_ms(ms)  delay(ms)
 
+//=====================
+//==  Useful Macros  ==
+//=====================
+
+#define USE_ESP32_FAST_IO
+
+#ifdef USE_ESP32_FAST_IO
+  #define PIN_CLR(p) GPIO.out_w1tc = (uint32_t)1 << (p)  // "clear"
+  #define PIN_SET(p) GPIO.out_w1ts = (uint32_t)1 << (p)  // "set"
+#else
+  #define PIN_CLR(p) digitalWrite(p, LOW)  // Standard clear (slow)
+  #define PIN_SET(p) digitalWrite(p, HIGH) // Standard set (slow)
+#endif
+
+#define SOFT_SPI_BYTE(c,sck,mosi) \
+    PIN_CLR(sck); if((c) & 0x80) PIN_SET(mosi); else PIN_CLR(mosi); PIN_SET(sck); \
+    PIN_CLR(sck); if((c) & 0x40) PIN_SET(mosi); else PIN_CLR(mosi); PIN_SET(sck); \
+    PIN_CLR(sck); if((c) & 0x20) PIN_SET(mosi); else PIN_CLR(mosi); PIN_SET(sck); \
+    PIN_CLR(sck); if((c) & 0x10) PIN_SET(mosi); else PIN_CLR(mosi); PIN_SET(sck); \
+    PIN_CLR(sck); if((c) & 0x08) PIN_SET(mosi); else PIN_CLR(mosi); PIN_SET(sck); \
+    PIN_CLR(sck); if((c) & 0x04) PIN_SET(mosi); else PIN_CLR(mosi); PIN_SET(sck); \
+    PIN_CLR(sck); if((c) & 0x02) PIN_SET(mosi); else PIN_CLR(mosi); PIN_SET(sck); \
+    PIN_CLR(sck); if((c) & 0x01) PIN_SET(mosi); else PIN_CLR(mosi); PIN_SET(sck)
+ 
 /////////////////////////////////////// 
 //
-void ssd1306_class::send_command(unsigned char c) {
+void ssd1306_class::send_command(uint8_t c) {
   if(_wire != NULL) {
     _wire->beginTransmission(SSD1306_I2C_ADDRESS);
     _wire->write(0X00); // This is Command
@@ -117,25 +143,32 @@ void ssd1306_class::send_command(unsigned char c) {
     _wire->endTransmission();
   }
   else if(_spi != NULL) {
-    digitalWrite(_dc, LOW);
-    digitalWrite(_cs, LOW);
+    PIN_CLR(_dc);
+    PIN_CLR(_cs);
     _spi->write(c);
-    digitalWrite(_cs, HIGH);
+    PIN_SET(_cs);
+  }
+  else if(_softspi) {
+    PIN_SET(_softsck);
+    PIN_CLR(_dc);
+    PIN_CLR(_cs);
+    SOFT_SPI_BYTE(c,_softsck,_softmosi); 
+    PIN_SET(_cs);
   }
 }
 
-void ssd1306_class::send_command_d1(unsigned char c, unsigned char d1) {
+void ssd1306_class::send_command_d1(uint8_t c, uint8_t d1) {
   send_command(c);
   send_command(d1);
 }
 
-void ssd1306_class::send_command_d2(unsigned char c, unsigned char d1, unsigned char d2) {
+void ssd1306_class::send_command_d2(uint8_t c, uint8_t d1, uint8_t d2) {
   send_command(c);
   send_command(d1);
   send_command(d2);
 }
 
-void ssd1306_class::send_data(const uint8_t dat, uint16_t len) { 
+void ssd1306_class::send_data(uint8_t dat, uint16_t len) { 
   uint8_t x;
   if(len > SSD1306_LCDWIDTH)
     len = SSD1306_LCDWIDTH;
@@ -160,10 +193,19 @@ void ssd1306_class::send_data(const uint8_t dat, uint16_t len) {
     #endif
   }
   else if(_spi != NULL) {
-    digitalWrite(_dc, HIGH);
-    digitalWrite(_cs, LOW);
+    PIN_SET(_dc);
+    PIN_CLR(_cs);
     _spi->writePattern(&dat, 1, len);
-    digitalWrite(_cs, HIGH);
+    PIN_SET(_cs);
+  }
+  else if(_softspi) {
+    PIN_SET(_softsck);
+    PIN_SET(_dc);
+    PIN_CLR(_cs);
+    for(uint16_t i=0; i<len; i++) {
+      SOFT_SPI_BYTE(dat,_softsck,_softmosi); 
+    }
+    PIN_SET(_cs);
   }
 }
 
@@ -192,10 +234,20 @@ void ssd1306_class::send_data(const uint8_t * dat, uint16_t len) {
     #endif
   }
   else if(_spi != NULL) {
-    digitalWrite(_dc, HIGH);
-    digitalWrite(_cs, LOW);
+    PIN_SET(_dc);
+    PIN_CLR(_cs);
     _spi->writeBytes(dat, len);
-    digitalWrite(_cs, HIGH);
+    PIN_SET(_cs);
+  }
+  else if(_softspi) {
+    PIN_SET(_softsck);
+    PIN_SET(_dc);
+    PIN_CLR(_cs);
+    for(uint16_t i=0; i<len; i++) {
+      SOFT_SPI_BYTE(*dat,_softsck,_softmosi); 
+      dat++;
+    }
+    PIN_SET(_cs);
   }
 }
 
@@ -275,14 +327,20 @@ void ssd1306_class::progress_bar(uint8_t x, uint8_t y, uint8_t val, uint8_t max,
   }
 }
 
-ssd1306_class::ssd1306_class(TwoWire * wire, SPIClass * spi, uint8_t cs, uint8_t dc, uint8_t rows, uint8_t tickers) {
+ssd1306_class::ssd1306_class(TwoWire * wire, SPIClass * spi, SoftSPI * softspi, uint8_t cs, uint8_t dc, uint8_t rows, uint8_t tickers) {
   memset(this, 0, sizeof(ssd1306_class));
   _wire       = wire;
   _spi        = spi;
+  _softspi    = softspi != NULL;
   _cs         = cs;
   _dc         = dc;
   _device     = OLED_UNKNOWN;
   _font       = SSD1306_FONT_8X8;
+  if(_softspi) {
+    _softsck  = softspi->_sck;
+    _softmosi = softspi->_mosi;
+  }
+
   #if OLED_USE_BUFFER
     _nr_rows    = rows;
     _nr_tickers = tickers;
@@ -309,10 +367,24 @@ ssd1306_class::~ssd1306_class() {
   #endif
 }
 
-uint8_t ssd1306_class::initialize(uint8_t flags) {
+void ssd1306_class::suspend() {  
+  if(_spi != NULL) {
+    _spi->endTransaction(); // For some reason Wifi will not cannecot with open SPI port
+  }
+}
+
+void ssd1306_class::resume() {
+  if(_spi != NULL) {
+    _spi->beginTransaction(SPISettings(_speed, SPI_MSBFIRST, SPI_MODE0));
+  }
+}
+
+uint8_t ssd1306_class::initialize(uint8_t flags, uint32_t speed) {
   delay_ms(10);
   // check for SH1106 controller
   if(_wire != NULL) {
+    _speed = (speed < 10000) ? SSD1306_I2C_SPEED : speed;
+    _wire->setClock(_speed);
     _wire->beginTransmission(SSD1306_I2C_ADDRESS);
     _wire->write(0);
     if(_wire->endTransmission() != 0) {
@@ -333,13 +405,22 @@ uint8_t ssd1306_class::initialize(uint8_t flags) {
   else if(_spi != NULL) {
     pinMode(_cs, OUTPUT);
     pinMode(_dc, OUTPUT);
-    digitalWrite(_cs, HIGH);
-    digitalWrite(_dc, HIGH);
-    delay_ms(10);
-    digitalWrite(_cs, LOW);
-    _spi->beginTransaction(SPISettings(SSD1306_SPI_SPEED, SPI_MSBFIRST, SPI_MODE0));
+    PIN_SET(_cs);
+    PIN_SET(_dc);
+    delay_ms(1);
+    _speed = (speed < 10000) ? SSD1306_SPI_SPEED : speed;
+    _spi->beginTransaction(SPISettings(_speed, SPI_MSBFIRST, SPI_MODE0));
   }
-
+  else if(_softspi) {
+    pinMode(_cs, OUTPUT);
+    pinMode(_dc, OUTPUT);
+    pinMode(_softsck, OUTPUT);
+    pinMode(_softmosi, OUTPUT);
+    PIN_SET(_cs);
+    PIN_SET(_dc);
+    PIN_SET(_softsck);
+    PIN_SET(_softmosi);
+  }
   if(flags & OLED_INIT_NO_REGS_MASK) return _device;
   delay(100);
   // Init sequence for 128x64 OLED module

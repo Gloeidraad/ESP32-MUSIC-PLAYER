@@ -436,6 +436,13 @@ uint8_t SettingsClass::GetLogVolume(uint8_t v, uint8_t range) {
   return logvol > v ? logvol : v;
 }
 
+uint8_t SettingsClass::GetLinVolume(uint8_t v, uint8_t range) {
+  if(NV.VolumeSteps == 0) return range;
+  if(v > NV.VolumeSteps) v = NV.VolumeSteps;
+  int linvol = (int)range * (int)v / (int)NV.VolumeSteps;
+  return linvol > v ? linvol : v;
+}
+
 //==========================================================
 // SSID settings for webradio 
 //   - ID       : stored in EEPROM page 0 @ 0x80 (128)

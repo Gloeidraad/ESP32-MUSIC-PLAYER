@@ -15,10 +15,11 @@
 #define DISPLAY_HELP_URLS_FOUND              (uint8_t)9
 
 class DisplayClass {
-    
   public:
     DisplayClass();
     void Initialize(bool reboot);
+    void Suspend();
+    void Resume();
 
     void ShowWelcome(void);
     void ShowBaseScreen(const char * help_line);
@@ -54,10 +55,12 @@ class DisplayClass {
     void ShowMenuStrings(const char *s1, const char *s2, const char *s3);
 
     //void ShowFrequencies(void);
-    void ShowVolume(void);
+    void ShowVolume();
     void ShowVolume(uint8_t vol, uint8_t max);
 
     void loop(uint32_t timestamp);
+
+    uint8_t MenuStringMax();
 
   protected:
     void ShowLine(uint8_t y, const char *s, uint8_t font, bool no_queue = false);
@@ -68,6 +71,7 @@ class DisplayClass {
     void SetTrackString(const char *);
     void SetTimeString(const char *);
     void ShowMenuString(uint8_t y, const char *s, uint8_t font);
+    void ShowVolumeBar(uint8_t vol, uint8_t max);
 
     char    _track_string[10]; // Can hold max "9999/9999"
     char    _time_string[18];  // Can hold max "24:59:59/24:59:59"

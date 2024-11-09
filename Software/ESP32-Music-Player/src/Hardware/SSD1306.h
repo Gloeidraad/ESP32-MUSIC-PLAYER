@@ -24,14 +24,19 @@
 
 class ssd1306_class {
   public:
-    ssd1306_class(TwoWire & wire) : ssd1306_class(&wire, NULL, 0, 0, 0, 0) {}
-    ssd1306_class(SPIClass & spi, uint8_t cs, uint8_t dc) : ssd1306_class(NULL, &spi, cs, dc, 0, 0) {}
+    class SoftSPI;
+    ssd1306_class(TwoWire & wire) : ssd1306_class(&wire, NULL, NULL,0, 0, 0, 0) {}
+    ssd1306_class(SPIClass & spi, uint8_t cs, uint8_t dc) : ssd1306_class(NULL, &spi, NULL, cs, dc, 0, 0) {}
+    ssd1306_class(SoftSPI & softspi, uint8_t cs, uint8_t dc) : ssd1306_class(NULL, NULL, &softspi, cs, dc, 0, 0) {}
     #if OLED_USE_BUFFER
-      ssd1306_class(TwoWire & wire, uint8_t rows, uint8_t tickers) : ssd1306_class(&wire, NULL, 0, 0, rows, tickers) {}
-      ssd1306_class(SPIClass & spi, uint8_t cs, uint8_t dc, uint8_t rows, uint8_t tickers) : ssd1306_class(NULL, &spi, cs, dc, rows, tickers) {}
+      ssd1306_class(TwoWire & wire, uint8_t rows, uint8_t tickers) : ssd1306_class(&wire, NULL, NULL,0, 0, rows, tickers) {}
+      ssd1306_class(SPIClass & spi, uint8_t cs, uint8_t dc, uint8_t rows, uint8_t tickers) : ssd1306_class(NULL, &spi, NULL, cs, dc, rows, tickers) {}
+      ssd1306_class(SoftSPI & softspi, uint8_t cs, uint8_t dc, uint8_t rows, uint8_t tickers) : ssd1306_class(NULL, NULL, &softspi, cs, dc, rows, tickers) {}
     #endif
     ~ssd1306_class();
-    uint8_t initialize(uint8_t flags = 0);
+    uint8_t initialize(uint8_t flags = 0, uint32_t speed = 0);
+    void suspend(); // An open SPI port can interfere with other hardware (esp. Wifi), so suspend before initialisingn wifi
+    void resume();  // and resume after wifi connects...
     void clearscreen();
     void progress_bar(uint8_t x, uint8_t y, uint8_t val, uint8_t max, bool double_row = false);
     void setfont(font_id font) { _font = font; }
@@ -67,15 +72,22 @@ class ssd1306_class {
     #endif
     void set_x_offset(uint8_t offset)  { _x_offset = offset; }
 
+    class SoftSPI { 
+      public:
+        SoftSPI(uint8_t sck, uint8_t mosi) { _sck = sck; _mosi = mosi; }
+        uint8_t _sck;
+        uint8_t _mosi;
+   } ;
+
   private:
-    ssd1306_class(TwoWire * wire, SPIClass * spi, uint8_t cs, uint8_t dc, uint8_t rows, uint8_t tickers);
+    ssd1306_class(TwoWire * wire, SPIClass * spi, SoftSPI * softspi, uint8_t cs, uint8_t dc, uint8_t rows, uint8_t tickers);
     void hardware_clearscreen();
     void clearlines(uint8_t y, uint8_t n);
     void gotoxy(uint8_t x, uint8_t y);
-    void send_command(unsigned char c);
-    void send_command_d1(unsigned char c, unsigned char d1);
-    void send_command_d2(unsigned char c, unsigned char d1, unsigned char d2);
-    void send_data(const uint8_t dat , uint16_t len = 1);
+    void send_command(uint8_t c);
+    void send_command_d1(uint8_t c, uint8_t d1);
+    void send_command_d2(uint8_t c, uint8_t d1, uint8_t d2);
+    void send_data(uint8_t dat , uint16_t len = 1);
     void send_data(const uint8_t * dat, uint16_t len);
     #if OLED_USE_BUFFER
       void update_ticker(uint8_t y);
@@ -106,9 +118,13 @@ class ssd1306_class {
 
     TwoWire *_wire;
     SPIClass*_spi;
+    bool     _softspi;
     uint8_t  _device;
+    uint32_t _speed;
     uint8_t  _x, _y;
     uint8_t  _cs, _dc;
+    uint8_t  _softsck;
+    uint8_t  _softmosi;
     uint8_t  _x_offset;
     uint8_t  _start_column;  // 0 for SSD1306, 2 for SH1106
     font_id  _font;

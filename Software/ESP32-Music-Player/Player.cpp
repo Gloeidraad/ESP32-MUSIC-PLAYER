@@ -60,7 +60,10 @@ bool PlayerClass::PlayTrackFromSD(int n, uint32_t resume_pos, uint32_t resume_ti
   }
   String track(TrackSettings.GetTrackName(n));
   Serial.printf("Starting [%d]: \"%s\" at %d (%ds)\n", n, track.c_str(), resume_pos, resume_time);
-  Display.ShowTrackTitle(track.c_str());
+  int i = track.lastIndexOf('.');        // Find the location of the file extension 
+  if(i > 0) track[i] = '\0';             // Remove the extension
+  Display.ShowTrackTitle(track.c_str()); // Show track without ".mp3" extension
+  if(i > 0) track[i] = '.';              // Restore the extension
   #ifdef USE_SD_MMC
     _audio->connecttoFS(SD_MMC, track.c_str(), resume_pos);
   #else
@@ -300,9 +303,16 @@ _a2dp_sink->start("MyMusic");
     case SET_SOURCE_WEB_RADIO  :{uint64_t timestamp_us = esp_timer_get_time();
                                  uint8_t  timeout = 25;
                                  Display.ShowHelpLine(DISPLAY_HELP_INITIALIZING_WEBRADIO, true);
+                                 Display.Suspend();
                                  Serial.printf("Connecting to %s ", SsidSettings.GetSsid(Settings.NV.CurrentSsid), false);
-                                 WiFi.begin(SsidSettings.GetSsid(Settings.NV.CurrentSsid), SsidSettings.GetPassword(Settings.NV.CurrentSsid));
-                                 WiFi.setTxPower((wifi_power_t)Settings.GetWifiTxLevel());
+                                 //WiFi.disconnect();
+                                 WiFi.begin(SsidSettings.GetSsid(Settings.NV.CurrentSsid), SsidSettings.GetPassword(Settings.NV.CurrentSsid),1);
+                                 //WiFi.connect(SsidSettings.GetSsid(Settings.NV.CurrentSsid), SsidSettings.GetPassword(Settings.NV.CurrentSsid));
+                                 //WiFi.setTxPower((wifi_power_t)Settings.GetWifiTxLevel());
+                                 //delay(100);
+                                 //WiFi.disconnect();
+                                 //delay(100);
+                                 //WiFi.reconnect();
                                  while (WiFi.status() != WL_CONNECTED  && timeout > 0) {
                                    if( esp_timer_get_time() >= timestamp_us + 500000) {
                                       timestamp_us = esp_timer_get_time();
@@ -314,11 +324,13 @@ _a2dp_sink->start("MyMusic");
                                  if(WiFi.status() != WL_CONNECTED) {
                                    Serial.println(" CONNECTION FAILED");
                                    //Display.ShowHelpLine(DISPLAY_HELP_WIFI_CONNECT_FAILED, true);
+                                   Display.Resume();
                                    Display.ShowWebRadioConnect(false);
                                    //Settings.WifiConnected = 0;
                                  }
                                  else {
                                    Serial.println(" CONNECTED");
+                                   Display.Resume();
                                    if(Settings.Play)
                                      Display.ShowHelpLine(DISPLAY_HELP_WIFI_CONNECTED, true);
                                    else {
@@ -339,7 +351,8 @@ _a2dp_sink->start("MyMusic");
                                    _audio->setVolume(SET_VOLUME_DEFAULT);
                                  #endif
                                  //Settings.InitDAC = 1;
-                                }break;
+                                }
+                                break;
     
     case SET_SOURCE_WAVE_GEN   : _waveform_player = new SimpleWaveGeneratorClass;
                                  _waveform_player->Init();
@@ -361,6 +374,7 @@ void PlayerClass::SetVolume(int vol) {
   if(_waveform_player != NULL) _waveform_player->Volume(Settings.GetLogVolume(WAVEFORM_VOLUME_MAX));
   if(_a2dp_sink != NULL)       _a2dp_sink->set_volume(Settings.GetLinVolume(BLUETOOTH_VOLUME_MAX));
   //if(Settings.NV.Volume != vol) {
+  //Display.ShowVolume("12345678901234567");
     Display.ShowVolume();
     Settings.NV.Volume = vol;
   //}
@@ -406,6 +420,7 @@ void PlayerClass::Play(void) {
                                  Settings.CurrentTrackTime = 0;
                                  Display.ShowWebRadioNumber();
                                  Display.ShowPlayPause(Settings.Play);
+                                 Display.ShowVolume(); // Show station name on volume line
                                  Serial.println("**********new radio started************");
                                  Settings.WebTitleReceived = 0;
                                  break;
