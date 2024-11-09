@@ -28,7 +28,7 @@
 #define I2C_HIGH_CLOCK_SPEED  400000
 #define I2C_LOW_CLOCK_SPEED   100000
 
-#define I2C_PORT_OLED         Wire1  // Undef for SPI display
+#define I2C_PORT_OLED         Wire1
 #define I2C_PORT_EEPROM       Wire
 
 #define OLED_ROTATE_FLAG      4         // 0 = no rotation, 4 = rotate 180 degrees
@@ -75,22 +75,8 @@
 #define PIN_SDA1        21
 
 // I2C port 2 pins
-#ifdef I2C_PORT_OLED
-  #define PIN_SCL2        13 
-  #define PIN_SDA2        27
-  #define ROTATE_DISPLAY  0
-#else
-  #ifndef USE_SD_MMC
-    #error Cannot use SP display and SD card in SPI mode simultaneously
-  #endif
-  #define PIN_MISO  -1  //not used
-  #define PIN_MOSI  23
-  #define PIN_SCLK  18
-  #define PIN_CS     5  // Chip select control pin
-  #define PIN_DC    19  // Data Command control pin
-  #define PIN_RST   -1  // Set TFT_RST to -1 if display RESET is connected to ESP32 board RST
-  #define ROTATE_DISPLAY OLED_INIT_ROTATE180_MASK
-#endif
+#define PIN_SCL2        13 
+#define PIN_SDA2        27//14
 
 // Switch IDs
 #define KEY_SPARE        0

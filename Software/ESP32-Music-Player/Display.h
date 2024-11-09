@@ -54,12 +54,10 @@ class DisplayClass {
     void ShowMenuStrings(const char *s1, const char *s2, const char *s3);
 
     //void ShowFrequencies(void);
-    void ShowVolume();
+    void ShowVolume(void);
     void ShowVolume(uint8_t vol, uint8_t max);
 
     void loop(uint32_t timestamp);
-
-    uint8_t MenuStringMax();
 
   protected:
     void ShowLine(uint8_t y, const char *s, uint8_t font, bool no_queue = false);
@@ -70,7 +68,6 @@ class DisplayClass {
     void SetTrackString(const char *);
     void SetTimeString(const char *);
     void ShowMenuString(uint8_t y, const char *s, uint8_t font);
-    void ShowVolumeBar(uint8_t vol, uint8_t max);
 
     char    _track_string[10]; // Can hold max "9999/9999"
     char    _time_string[18];  // Can hold max "24:59:59/24:59:59"

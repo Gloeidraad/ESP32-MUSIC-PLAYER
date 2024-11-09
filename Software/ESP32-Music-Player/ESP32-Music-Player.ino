@@ -11,7 +11,7 @@
 #include "src/AudioI2S/Audio.h"
 #include "src/OneButton/OneButton.h"
 #include "src/Hardware/board.h"
-#include "src/Hardware/SSD1306.h"
+#include "src/Hardware/NFOR_SSD1306.h"
 #include "src/settings.h"
 #include "src/ChipInfo.h" 
 #include "src/I2C_Scanner.h"
@@ -354,17 +354,9 @@ void setup(void) {
     SPI.begin(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI);
     SPI.setFrequency(1000000);
   #endif
-  #ifdef I2C_PORT_OLED
-    I2C_PORT_OLED.begin(PIN_SDA2, PIN_SCL2, I2C_HIGH_CLOCK_SPEED);
-    I2C_PORT_OLED.setBufferSize(256 + 8);
-  #else
-    pinMode(PIN_CS, OUTPUT);
-    pinMode(PIN_DC, OUTPUT);
-    digitalWrite(PIN_CS, HIGH);
-    digitalWrite(PIN_DC, HIGH);
-    SPI.begin(PIN_SCLK, PIN_MISO, PIN_MOSI);
-    SPI.setFrequency(80000000);
-  #endif
+  // I2C
+  I2C_PORT_OLED.begin(PIN_SDA2, PIN_SCL2, I2C_HIGH_CLOCK_SPEED);
+  I2C_PORT_OLED.setBufferSize(256 + 8);
   I2C_PORT_EEPROM.begin(PIN_SDA1, PIN_SCL1, I2C_LOW_CLOCK_SPEED);
   I2C_PORT_EEPROM.setBufferSize(256 + 8);
 

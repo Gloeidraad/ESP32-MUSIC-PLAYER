@@ -203,20 +203,14 @@ static int MenuSelectSsid(int function) {
 }
 
 /*****************************************************************************/
-/*  Select Track                                                             */
+/*  Select Track/Station                                                      */
 /*****************************************************************************/
 
 static void MenuTrackAdjust(int adj) {
   char text[32];
-  MenuValueAdjust(adj, 1, Settings.NV.DiskTotalTracks, 1);
-  const char * track_name = TrackSettings.GetTrackName(menu_edit_val);
-  int len = strlen(track_name);
-  strncpy(text, track_name, Display.MenuStringMax());
-  text[Display.MenuStringMax()] = '\0';
-  if(len < Display.MenuStringMax()) {
-    char * p = strrchr(text, '.');
-    if(p != NULL) *p = '\0'; // do not show the .mp3 extension 
-  }
+  uint32_t max = Settings.NV.SourceAF == SET_SOURCE_SD_CARD ? Settings.NV.DiskTotalTracks : Settings.NV.WebRadioTotalStations; 
+  MenuValueAdjust(adj, 1, max, 1);
+  sprintf(text,"%d/%d", menu_edit_val, max);
   Display.ShowMenuStrings(NULL, text, NULL);
 }
 
@@ -227,8 +221,14 @@ static int MenuTrack(int function) {
                                 menu_edit_val = Settings.NV.DiskCurrentTrack;
                                 Display.ShowMenuStrings(MENU_SELECT_TRACK, NULL, MENU_OK_CONFIRM);
                               }
-                              else
-                               return MENU_RESULT_EXIT;
+                              else {
+                                if(Settings.NV.SourceAF == SET_SOURCE_WEB_RADIO && Settings.NV.WebRadioTotalStations > 2) {
+                                  menu_edit_val = Settings.NV.WebRadioCurrentStation;
+                                  Display.ShowMenuStrings(MENU_SELECT_STATION, NULL, MENU_OK_CONFIRM);
+                                }
+                                else
+                                 return MENU_RESULT_EXIT;
+                              }
                               Settings.NewTrack = 0;                              
                               MenuTrackAdjust(0);
                               break;
@@ -243,45 +243,7 @@ static int MenuTrack(int function) {
     case MENU_FUNC_EXIT     : break;
   };
   if(Settings.NewTrack > 0)
-    return GUI_RESULT_TIMEOUT;  // Terminate this menu as soon a new track has been chosen
-  return GUI_RESULT_NOP;
-}
-
-/*****************************************************************************/
-/*  Select Station                                                           */
-/*****************************************************************************/
-
-static void MenuStationAdjust(int adj) {
-  web_station_t web_station;
-  MenuValueAdjust(adj, 1, Settings.NV.WebRadioTotalStations, 1);
-  UrlSettings.GetStation(menu_edit_val, web_station);
-  Display.ShowMenuStrings(NULL, web_station.name, NULL);
-}
-
-static int MenuStation(int function) {
-  switch(function) {
-    case MENU_FUNC_INIT     : Serial.println("OMT Menu URL");
-                              if(Settings.NV.SourceAF == SET_SOURCE_WEB_RADIO && Settings.NV.WebRadioTotalStations > 2) {
-                                menu_edit_val = Settings.NV.WebRadioCurrentStation;
-                                Display.ShowMenuStrings(MENU_SELECT_STATION, NULL, MENU_OK_CONFIRM);
-                              }
-                              else
-                                return MENU_RESULT_EXIT;
-                              Settings.NewTrack = 0;                              
-                              MenuStationAdjust(0);
-                              break;
-    case MENU_FUNC_TICK     : if(--menu_delay_100ms == 0)
-                                return GUI_RESULT_TIMEOUT;
-                              break;
-    case MENU_FUNC_KEY_UP   : MenuStationAdjust(1);  break;
-    case MENU_FUNC_KEY_DN   : MenuStationAdjust(-1); break;
-    case MENU_FUNC_KEY_OK   : Settings.NewTrack = menu_edit_val;
-                              return GUI_RESULT_NEW_TRACK;
-    case MENU_FUNC_KEY_MENU : return MENU_RESULT_EXIT;
-    case MENU_FUNC_EXIT     : break;
-  };
-  if(Settings.NewTrack > 0)
-    return GUI_RESULT_TIMEOUT;  // Terminate this menu as soon a new station has been chosen
+    return GUI_RESULT_TIMEOUT;  // Terminate thisn mane as soon a new track has been chosen
   return GUI_RESULT_NOP;
 }
 
@@ -534,23 +496,27 @@ typedef struct {
 
 #define MENU_INDEX_PLAYER          0
 #define MENU_INDEX_TRACK           1
-#define MENU_INDEX_URL             2
-#define MENU_INDEX_TIME            3
-#define MENU_INDEX_SSID            4
-#define MENU_INDEX_SOURCE          5
-#define MENU_INDEX_VOLUME          6 // Not used in this application
-#define MENU_INDEX_SETUP_TX_LEVEL1 7
-#define MENU_INDEX_SETUP_TX_LEVEL2 8
-#define MENU_INDEX_COUNT           9
+#define MENU_INDEX_TIME            2
+#define MENU_INDEX_SSID            3
+#define MENU_INDEX_SOURCE          4
+#define MENU_INDEX_VOLUME          5
+#define MENU_INDEX_SETUP_TX_LEVEL1 6
+#define MENU_INDEX_SETUP_TX_LEVEL2 7
+#define MENU_INDEX_COUNT           8
 
 #define MENU_INDEX_DEFAULT         MENU_INDEX_PLAYER
+
 static MenuType MenuEntries[MENU_INDEX_COUNT] = {
+  //{ MenuPlayer,          MENU_INDEX_TIME,            0,0 },
+  //{ MenuTime,            MENU_INDEX_TRACK,           0,1 },
+  //{ MenuTrack,           MENU_INDEX_SSID,            0,1 },
   { MenuPlayer,          MENU_INDEX_TRACK,           0,0 },
-  { MenuTrack,           MENU_INDEX_URL,             0,1 },
-  { MenuStation,         MENU_INDEX_TIME,            0,1 },
+  { MenuTrack,           MENU_INDEX_TIME,            0,1 },
   { MenuTime,            MENU_INDEX_SSID,            0,1 },
   { MenuSelectSsid,      MENU_INDEX_SOURCE,          0,1 },
   { MenuSource,          MENU_INDEX_SETUP_TX_LEVEL1, 0,1 },
+  //{ MenuSource,          MENU_INDEX_VOLUME,          0,1 },
+  //{ MenuVolumeControl,   MENU_INDEX_SETUP_TX_LEVEL1, 0,1 },
   { MenuWifiTxLevel,     MENU_INDEX_SETUP_TX_LEVEL2, 0,0 },
   { MenuBtTxLevel,       MENU_INDEX_DEFAULT,         0,0 }
 };

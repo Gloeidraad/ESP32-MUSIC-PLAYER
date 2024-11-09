@@ -60,10 +60,7 @@ bool PlayerClass::PlayTrackFromSD(int n, uint32_t resume_pos, uint32_t resume_ti
   }
   String track(TrackSettings.GetTrackName(n));
   Serial.printf("Starting [%d]: \"%s\" at %d (%ds)\n", n, track.c_str(), resume_pos, resume_time);
-  int i = track.lastIndexOf('.');        // Find the location of the file extension 
-  if(i > 0) track[i] = '\0';             // Remove the extension
-  Display.ShowTrackTitle(track.c_str()); // Show track without ".mp3" extension
-  if(i > 0) track[i] = '.';              // Restore the extension
+  Display.ShowTrackTitle(track.c_str());
   #ifdef USE_SD_MMC
     _audio->connecttoFS(SD_MMC, track.c_str(), resume_pos);
   #else
@@ -364,7 +361,6 @@ void PlayerClass::SetVolume(int vol) {
   if(_waveform_player != NULL) _waveform_player->Volume(Settings.GetLogVolume(WAVEFORM_VOLUME_MAX));
   if(_a2dp_sink != NULL)       _a2dp_sink->set_volume(Settings.GetLinVolume(BLUETOOTH_VOLUME_MAX));
   //if(Settings.NV.Volume != vol) {
-  //Display.ShowVolume("12345678901234567");
     Display.ShowVolume();
     Settings.NV.Volume = vol;
   //}
@@ -410,7 +406,6 @@ void PlayerClass::Play(void) {
                                  Settings.CurrentTrackTime = 0;
                                  Display.ShowWebRadioNumber();
                                  Display.ShowPlayPause(Settings.Play);
-                                 Display.ShowVolume(); // Show station name on volume line
                                  Serial.println("**********new radio started************");
                                  Settings.WebTitleReceived = 0;
                                  break;

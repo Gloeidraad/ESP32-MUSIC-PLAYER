@@ -2,7 +2,7 @@
 #include "Display.h"
 
 #include "src/Version.h"
-#include "src/Hardware/SSD1306.h"
+#include "src/Hardware/NFOR_SSD1306.h"
 #include "src/settings.h"
 #include "SimpleWaveGenerator.h"
 
@@ -96,7 +96,7 @@ void DisplayClass::MakeTimeString(void) {
 void DisplayClass::SetTrackString(const char *s) { strcpy(_track_string, s); _track_string_len = strlen(s); }
 void DisplayClass::SetTimeString(const char *s)  { strcpy(_time_string, s);  _time_string_len  = strlen(s); }
 
-#ifdef _SSD1306_H_
+#ifdef _NFOR_SSD1306_H_
 
   #define TICKER_ID           0
 
@@ -117,17 +117,12 @@ void DisplayClass::SetTimeString(const char *s)  { strcpy(_time_string, s);  _ti
   #define MENU_LINE_3         10
   #define MENU_LINE_4         11
 
-  #ifdef I2C_PORT_OLED
-    ssd1306_class OLED(I2C_PORT_OLED, SSD1306_LCDROWS + 4, 2); // Four extra rows for menus, two tickers
-  #else
-    ssd1306_class OLED(SPI, PIN_CS, PIN_DC, SSD1306_LCDROWS + 4, 2); // Four extra rows for menus, two tickers
-  #endif
-
+  NFOR_SSD1306 OLED(SSD1306_LCDROWS + 4, 2); // Four extra rows for menus, two tickers
                           //0        1     1   2
                           //123456789012345678901
   D_STRING s_Welcome[] = { "  Welcome to",
-                           "  ESP32",
-                           "  Music Player",
+                           "  ESP32 AM/FM",
+                           "  Radio Station",
                            SOFTWARE_VERSION SOFTWARE_SUBVERSION
                          }; 
 
@@ -143,7 +138,7 @@ DisplayClass::DisplayClass() {
 }
 
 void DisplayClass::Initialize(bool reboot) {
-  OLED.initialize(reboot ? OLED_INIT_NO_REGS_MASK : OLED_INIT_ROTATE180_MASK);
+  OLED.init(I2C_PORT_OLED, reboot ? 1 : OLED_ROTATE_FLAG);
   OLED.SetLineRow(MENU_LINE_1, PLAYER_NAME_LINE);
   OLED.SetLineRow(MENU_LINE_2, PLAYER_PLAY_LINE);
   OLED.SetLineRow(MENU_LINE_3, STATUS_LINE1);
@@ -167,11 +162,11 @@ void DisplayClass::PrepareMenuScreen(bool menu_on) {
 
 void DisplayClass::ShowWelcome(void) {
   int x;
-  OLED.puts(0, 1, s_Welcome[0], SSD1306_FONT_8X8);
-  OLED.puts(0, 3, s_Welcome[1], SSD1306_FONT_8X8);
-  OLED.puts(0, 5, s_Welcome[2], SSD1306_FONT_8X8);
+  OLED.puts_xy(0, 1, s_Welcome[0], SSD1306_FONT_8X8);
+  OLED.puts_xy(0, 3, s_Welcome[1], SSD1306_FONT_8X8);
+  OLED.puts_xy(0, 5, s_Welcome[2], SSD1306_FONT_8X8);
   x = SSD1306_Fonts[SSD1306_FONT_5X8_NARROW].u8LineLength - strlen(s_Welcome[3]); 
-  OLED.puts(x, 7, s_Welcome[3], SSD1306_FONT_5X8_NARROW);
+  OLED.puts_xy(x, 7, s_Welcome[3], SSD1306_FONT_5X8_NARROW);
   OLED.display(); // Force display
 }
 
@@ -179,17 +174,17 @@ void DisplayClass::ShowInfo(const char * msg) {
   int len = strlen(msg);
   OLED.display(); // Empty display queue
   if(len > SSD1306_Fonts[SSD1306_FONT_5X8].u8LineLength)
-    OLED.puts(0, 4, msg, SSD1306_Fonts[SSD1306_FONT_5X8_NARROW].u8LineLength, SSD1306_FONT_5X8_NARROW);
+    OLED.puts_xyn(0, 4, msg, SSD1306_Fonts[SSD1306_FONT_5X8_NARROW].u8LineLength, SSD1306_FONT_5X8_NARROW);
   else if(len > SSD1306_Fonts[SSD1306_FONT_8X8].u8LineLength)
-    OLED.puts(0, 4, msg, SSD1306_Fonts[SSD1306_FONT_5X8].u8LineLength, SSD1306_FONT_5X8);
+    OLED.puts_xyn(0, 4, msg, SSD1306_Fonts[SSD1306_FONT_5X8].u8LineLength, SSD1306_FONT_5X8);
   else
-    OLED.puts(0, 4, msg, SSD1306_Fonts[SSD1306_FONT_8X8].u8LineLength, SSD1306_FONT_8X8);
+    OLED.puts_xyn(0, 4, msg, SSD1306_Fonts[SSD1306_FONT_8X8].u8LineLength, SSD1306_FONT_8X8);
   OLED.display(); // Force display
 }
 
 void DisplayClass::ShowPlayer(void) {
   OLED.display(); // Empty display queue
-  OLED.puts(0, PLAYER_NAME_LINE, Settings.GetSourceName(), SSD1306_FONT_8X8);
+  OLED.puts_xy(0, PLAYER_NAME_LINE, Settings.GetSourceName(), SSD1306_FONT_8X8);
   OLED.display(); // Force display
 }
 
@@ -226,9 +221,9 @@ void DisplayClass::ShowLine(uint8_t y, const char *s, uint8_t font, bool no_queu
   if(s != NULL && s[0] != '\0') {
      int ll = SSD1306_Fonts[font].u8LineLength;
      if(strlen(s) > ll)
-       OLED.puts(0, y, s, ll, SSD1306_FontId_t(font));
+       OLED.puts_xyn(0, y, s, ll, font);
      else
-       OLED.puts(0, y, s, SSD1306_FontId_t(font));
+       OLED.puts_xy(0, y, s, font);
   }
   if(no_queue) OLED.display(); 
 }
@@ -317,16 +312,16 @@ void DisplayClass::ShowTrackNumberAndPlayTime(bool no_queue) {
   else if (len <= 21) fn = SSD1306_FONT_5X10_NUM; 
   else                fn = SSD1306_FONT_4X10_NUM;
   const SSD1306_Font_t & f = SSD1306_Fonts[fn];
-  OLED.puts(0,TRACK_LINE, _track_string, SSD1306_FontId_t(fn));
+  OLED.puts_xy(0,TRACK_LINE, _track_string, fn);
   OLED.set_x_offset(SSD1306_LCDWIDTH - (_time_string_len * f.u8FontWidth - (f.u8FontWidth - f.u8DataCols))); // Align right
-  OLED.puts(0,TIME_LINE, _time_string, _time_string_len, SSD1306_FontId_t(fn));
+  OLED.puts_xyn(0,TIME_LINE, _time_string, _time_string_len, fn);
   OLED.set_x_offset(0);
   if(no_queue) OLED.display(); 
 }
 
 void DisplayClass::ShowWaveformName(const char * id) {
   OLED.setline(TICKER_LINE, 0);
-  OLED.puts(0, TICKER_LINE, id, SSD1306_FONT_8X8);
+  OLED.puts_xy(0, TICKER_LINE, id, SSD1306_FONT_8X8);
 }
 
 void DisplayClass::ShowStreamTitle(const char *s) {
@@ -379,7 +374,7 @@ void DisplayClass::ShowFrequencies(void) {
   OLED.puts_xy(0, STATUS_LINE2, InfoString2, SSD1306_FONT_5X8);
   if(Settings.NV.OutputSel == SET_OUTPUT_ALL) {
     Settings.TvChanToString(InfoString2,"TV:", 0, true);
-    OLED.puts(SSD1306_Fonts[SSD1306_FONT_5X8].u8LineLength-strlen(InfoString2), STATUS_LINE2, InfoString2, SSD1306_FONT_5X8);
+    OLED.puts_xy(SSD1306_Fonts[SSD1306_FONT_5X8].u8LineLength-strlen(InfoString2), STATUS_LINE2, InfoString2, SSD1306_FONT_5X8);
   }
   OLED.shift_row_down(STATUS_LINE2);
   #else
@@ -389,45 +384,32 @@ void DisplayClass::ShowFrequencies(void) {
 #endif
 
 void DisplayClass::ShowVolume(uint8_t vol, uint8_t max) {
+  char InfoString[22];
+  InfoString[0] = 0;
   OLED.setline(STATUS_LINE1, 0); 
-  OLED.setline(STATUS_LINE2, 0);
-  if(Settings.NV.SourceAF == SET_SOURCE_WEB_RADIO && Settings.NV.WebRadioTotalStations > 0) {
-    web_station_t web_station;
-    UrlSettings.GetStation(Settings.NV.WebRadioCurrentStation, web_station);
-    OLED.puts(0, STATUS_LINE2, web_station.name, SSD1306_FONT_5X8_NARROW);
-    if(strlen(web_station.name) <= 9)
-      OLED.puts(11, STATUS_LINE2, "Volume", SSD1306_FONT_5X8_NARROW);
-    else if(strlen(web_station.name) <= 12)
-      OLED.puts(14, STATUS_LINE2, "Vol", SSD1306_FONT_5X8_NARROW);
-  }
-  else {
-    OLED.puts(11, STATUS_LINE2, "Volume", SSD1306_FONT_5X8_NARROW);
-  }
-  ShowVolumeBar(vol, max);
+  OLED.setline(STATUS_LINE2, 0); 
+  sprintf(InfoString, "Volume: %d/%d", vol, max);
+  OLED.puts_xy(0, STATUS_LINE2, InfoString, SSD1306_FONT_5X8);
   //OLED.shift_row_down(STATUS_LINE2);
 }
 
-void DisplayClass::ShowVolume() {
+void DisplayClass::ShowVolume(void) {
   ShowVolume(Settings.NV.Volume, Settings.NV.VolumeSteps);
-}
-
-void DisplayClass::ShowVolumeBar(uint8_t vol, uint8_t max) {
-  uint8_t bar[max+2];
-  for(int i = 0; i <= max; i++) {
-    bar[i] = vol >= i ? 0x7F : 0x41;
-  }
-  bar[max+1] = 0x7F;
-  OLED.setmem(SSD1306_LCDWIDTH - max - 3, STATUS_LINE2, bar, max+2);
+  //char InfoString[22];
+  //InfoString[0] = 0;
+  //OLED.setline(STATUS_LINE1, 0); 
+  //OLED.setline(STATUS_LINE2, 0); 
+  //sprintf(InfoString, "Volume: %d/%d", Settings.NV.Volume, Settings.NV.VolumeSteps);
+  //OLED.puts_xy(0, STATUS_LINE2, InfoString, SSD1306_FONT_5X8);
+  //OLED.shift_row_down(STATUS_LINE2);
 }
 
 void DisplayClass::ShowMenuString(uint8_t y, const char *s, uint8_t font) {
   if(s != NULL) {
     OLED.setline(y, 0); 
-    OLED.puts(0, y, s, SSD1306_FontId_t(font));
+    OLED.puts_xy(0, y, s, font);
   }
 }
-
-uint8_t DisplayClass::MenuStringMax() { return SSD1306_Fonts[SSD1306_FONT_5X8_NARROW].u8LineLength; }
 
 void DisplayClass::ShowMenuStrings(const char *s1, const char *s2, const char *s3){
   ShowMenuString(MENU_LINE_1, s1, SSD1306_FONT_8X8);
@@ -438,7 +420,7 @@ void DisplayClass::ShowMenuStrings(const char *s1, const char *s2, const char *s
     if(len <= 16)
       ShowMenuString(MENU_LINE_2, s2, SSD1306_FONT_8X8);
     else 
-      OLED.puts(0, MENU_LINE_2, s2, 21, SSD1306_FONT_5X8_NARROW); // Truncate to 21 characters
+      OLED.puts_xyn(0, MENU_LINE_2, s2, 21, SSD1306_FONT_5X8_NARROW); // Truncate to 21 characters
   }
 #ifndef  MENU_LINE_2_SHIFT
   OLED.setline(MENU_LINE_3, 0);

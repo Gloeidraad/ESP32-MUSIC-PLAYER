@@ -160,8 +160,6 @@ class SettingsClass {
     
     uint8_t GetLogVolume(uint8_t range) { return GetLogVolume(NV.Volume, range); }
     uint8_t GetLogVolume(uint8_t v, uint8_t range);
-    uint8_t GetLinVolume(uint8_t range) { return GetLinVolume(NV.Volume, range); }
-    uint8_t GetLinVolume(uint8_t v, uint8_t range);
 
     uint8_t GetWifiTxLevel(int index = -1);
     int8_t  GetBtTxLevel(int index = -1);
@@ -182,6 +180,7 @@ class SettingsClass {
     uint8_t  FirstSong;
     uint8_t  NewSourceAF;
     uint8_t  NewTrack;
+    //uint8_t  InitDAC;
     uint8_t  WebTitleReceived;
 
   protected:
