@@ -1,8 +1,8 @@
 This sketch has been built with Arduino IDE 2.3.2 and ESP32 board package 2.0.17.
 
-It should be no problem to use a newer or older IDE version, however these
-instructions are for the 2.3.2 version. Please not that the sketch will not run
-when compiled with ESP32 board package 3.0.0 or higher.
+It should be no problem to use a newer or older IDE version, however these instructions
+are for the 2.3.2 - 2.3.4 versions. Please note that the sketch will not run when
+compiled with ESP32 board package 3.0.0 or higher.
 
 Step 1: Download the Arduino IDE software from:
         https://www.arduino.cc/en/software
