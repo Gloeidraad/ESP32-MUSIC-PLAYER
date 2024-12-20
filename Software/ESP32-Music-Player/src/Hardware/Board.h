@@ -29,7 +29,7 @@
 #define I2C_LOW_CLOCK_SPEED     100000
 #define SPI_OLED_CLOCK_SPEED  20000000
 
-//#define I2C_PORT_OLED         Wire1  // Undef for SPI display
+#define I2C_PORT_OLED         Wire1  // Undef for SPI display
 #define I2C_PORT_EEPROM       Wire
 
 #define OLED_ROTATE_FLAG      4         // 0 = no rotation, 4 = rotate 180 degrees
