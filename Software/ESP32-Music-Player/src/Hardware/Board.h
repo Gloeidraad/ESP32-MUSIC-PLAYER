@@ -1,6 +1,8 @@
 #ifndef _BOARD_H_
 #define _BOARD_H_
 
+#include "SSD1306.h" 
+
 #define ESP32_WROVER_QVGA   0    // Usig final QVGA PCBA
 #define ESP32_S3_PLAYER     1    // Usig final Player
 #define TARGET_BOARD        ESP32_WROVER_QVGA
@@ -27,12 +29,10 @@
 
 #define I2C_HIGH_CLOCK_SPEED    400000
 #define I2C_LOW_CLOCK_SPEED     100000
-#define SPI_OLED_CLOCK_SPEED  20000000
+#define SPI_OLED_CLOCK_SPEED  10000000  // SSD1306 can handle 20 MHz, SSD1309 10 MHz, datasheet says max 10 MHz for SSD130X, 4 MHz for SH1106
 
 #define I2C_PORT_OLED         Wire1  // Undef for SPI display
 #define I2C_PORT_EEPROM       Wire
-
-#define OLED_ROTATE_FLAG      4         // 0 = no rotation, 4 = rotate 180 degrees
 
 #define USE_SD_MMC
 
@@ -60,9 +60,9 @@
 
 #ifdef USE_SD_MMC
   // SD card in MMC mode
-  #define SD_MMC_CMD      15  //Please do not modify it.
-  #define SD_MMC_CLK      14  //Please do not modify it. 
-  #define SD_MMC_D0        2  //Please do not modify it.
+  #define SD_MMC_CMD      15  //Please do not modify it when using ESP32.
+  #define SD_MMC_CLK      14  //Please do not modify it when using ESP32. 
+  #define SD_MMC_D0        2  //Please do not modify it when using ESP32.
 #else
   // SD card in SPI mode
   #define PIN_SPI_MOSI    23
@@ -79,10 +79,10 @@
 #ifdef I2C_PORT_OLED
   #define PIN_SCL2        13 
   #define PIN_SDA2        27
-  #define ROTATE_DISPLAY  0
+  #define ROTATE_DISPLAY  OLED_INIT_ROTATE180_MASK
 #else
   #ifndef USE_SD_MMC
-    #error Cannot use SP display and SD card in SPI mode simultaneously
+    #error Cannot use SPI display and SD card in SPI mode simultaneously
   #endif
   #define PIN_MISO  -1  //not used
   #define PIN_MOSI  23
@@ -90,7 +90,7 @@
   #define PIN_CS     5  // Chip select control pin
   #define PIN_DC    19  // Data Command control pin
   #define PIN_RST   -1  // Set TFT_RST to -1 if display RESET is connected to ESP32 board RST
-  #define ROTATE_DISPLAY OLED_INIT_ROTATE180_MASK
+  #define ROTATE_DISPLAY OLED_INIT_ROTATE0_MASK
 #endif
 
 // Switch IDs

@@ -361,7 +361,7 @@ ssd1306_class::~ssd1306_class() {
   #if OLED_USE_BUFFER
     free(_lines);
     for(int i = 0; i < _nr_tickers; i++) {
-      if(_tickers->data != NULL) free(_tickers->data);
+      if(_tickers[i].data != NULL) free(_tickers[i].data);
     } 
     free(_tickers); 
   #endif
@@ -568,19 +568,19 @@ void ssd1306_class::update_ticker(uint8_t id) {
   }
 }
 
-void ssd1306_class::start_ticker(uint8_t id, uint8_t row_id, const char *s, uint8_t font, uint16_t speed, uint16_t scrolldelay) {
+void ssd1306_class::start_ticker(uint8_t id, uint8_t row_id, const char *s, font_id font, uint16_t speed, uint16_t scrolldelay) {
   const SSD1306_Font_t *f = &SSD1306_Fonts[font];
-  int ll = f->u8LineLength;
+  int linelen = f->u8LineLength;
   int len = strlen(s);
   int16_t datalen;
   int8_t  w;
-  Serial.printf("Start ticker: font: %d, char/line: %d, strlen: %d\n", font, ll, len);
+  Serial.printf("Start ticker: font: %d, char/line: %d, strlen: %d\n", font, linelen, len);
   if(id >= _nr_tickers) {
     Serial.printf("Cannot create ticker id %d for row %d\n", id, row_id);
     return; // out of bounds
   }
   stop_ticker(id, false); // stop possible previous ticker
-  if(len <= ll) {
+  if(len <= linelen) {
     Serial.printf("No need to create ticker for: '%s'\n", s);
     setline(row_id, 0);
     puts(0, row_id, s, font); // show the line

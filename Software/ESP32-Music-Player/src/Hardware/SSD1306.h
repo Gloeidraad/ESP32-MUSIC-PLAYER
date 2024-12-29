@@ -18,6 +18,7 @@
 
 #define OLED_INIT_NO_REGS_MASK    0x01  // Do not write OLED registers. (Usefull for making soft reboot unnoticed)
 #define OLED_INIT_NO_ERASE_MASK   0x02  // Prevents erasing screen (usefull during soft reboot)
+#define OLED_INIT_ROTATE0_MASK    0x00  // dor not rotate the screen
 #define OLED_INIT_ROTATE180_MASK  0x04  // Rotates the screen by 180 degrees
 
 #define font_id SSD1306_FontId_t
@@ -41,6 +42,7 @@ class ssd1306_class {
     void progress_bar(uint8_t x, uint8_t y, uint8_t val, uint8_t max, bool double_row = false);
     void setfont(font_id font) { _font = font; }
     void putch(uint8_t c, font_id font = SSD1306_FONT_UNCHANGED);
+   
     void puts(const char *s, uint8_t n, font_id font = SSD1306_FONT_UNCHANGED);
     void putch(uint8_t x, uint8_t y, unsigned char c, font_id font = SSD1306_FONT_UNCHANGED)         { _x = x; _y = y; putch(c,font); }
     void puts(uint8_t x, uint8_t y, const char *s, font_id font = SSD1306_FONT_UNCHANGED)            { puts(x,y,s,strlen(s),font);    }
@@ -48,7 +50,7 @@ class ssd1306_class {
     void puts(uint8_t x, uint8_t y, const char *s, uint8_t n, font_id font = SSD1306_FONT_UNCHANGED) { _x = x; _y = y; puts(s,n,font);  }
     #if OLED_USE_BUFFER
       void clearbuffer(uint8_t v = 0);
-      void start_ticker(uint8_t id, uint8_t row, const char *s, uint8_t font, uint16_t speed = 3, uint16_t scrolldelay = 50);
+      void start_ticker(uint8_t id, uint8_t row, const char *s, font_id font, uint16_t speed = 3, uint16_t scrolldelay = 50);
       void stop_ticker(uint8_t id, bool id_is_y = true);
       void setmem(uint8_t x, uint8_t y, uint8_t v, uint8_t n);
       void setmem(uint8_t x, uint8_t y, const uint8_t * v, uint8_t n);
