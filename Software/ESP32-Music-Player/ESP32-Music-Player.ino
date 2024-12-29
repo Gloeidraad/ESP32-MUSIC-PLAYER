@@ -91,7 +91,10 @@ static struct {
   { "oled",   "oled-display"    , false }, // 16
   { "wifi",   "wifi-status"     , false }, // 17
   { "tx",     "wifi-tx-power"   , false }, // 18
-  { "vol",    "volume"          , true  }, // 19
+  { "vol",    "volume"          , false }, // 19
+  { "pp",     "play/pause"      , false }, // 20
+  { "next",   "nexttrack"       , false }, // 21
+  { "prev",   "prevtrack"       , false }, // 22
 };
 
 static void serial_command_help(void) {
@@ -147,6 +150,17 @@ static void parse_command(String &r) {
                  Player.SetVolume(vol);
              }
              break;
+    case 20: if(Settings.FirstTime) {
+               Serial.println("FIRST TIME");    
+               Settings.FirstSong = 1;
+               Player.Play();
+               Settings.FirstTime = 0;
+             }
+             else
+               Player.PauseResume();
+             break;
+    case 21: Player.PlayNext();     break;
+    case 22: Player.PlayPrevious(); break;
     default: Serial.println("Unknown Command"); break;
   }
 }
