@@ -246,6 +246,7 @@ void SettingsClass::EepromLoad(void) {
   #else
     NV.Volume         = Validate(NV.Volume,      SET_VOLUME_MIN,       NV.VolumeSteps,      NV.VolumeSteps);
   #endif
+  NV.OutputFormat    &= 1;
   NV.DiskTotalTracks  = Validate(NV.DiskTotalTracks, 0, SET_SD_TRACKS_MAX + 1, 0); 
   NV.DiskCurrentTrack = Validate(NV.DiskCurrentTrack, 1, NV.DiskTotalTracks, 1);
   NV.CurrentSsid      = Validate(NV.CurrentSsid, 0, SET_SSID_MAX, 0);
@@ -350,6 +351,7 @@ void SettingsClass::Print(void) {
   PRINT_SETTINGS_VALUE(Settings.NV.BtName,s);
   PRINT_SETTINGS_VALUE_DEC(Settings.NV.Volume);
   PRINT_SETTINGS_VALUE_DEC(Settings.NV.VolumeSteps);
+  PRINT_SETTINGS_VALUE_DEC(Settings.NV.OutputFormat);
   
   PRINT_SETTINGS_VALUE(Settings.CurrentTrackTime,d);
   PRINT_SETTINGS_VALUE(Settings.TotalTrackTime,d);

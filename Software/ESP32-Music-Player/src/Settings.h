@@ -115,6 +115,7 @@ typedef struct {
   uint16_t WebRadioTotalStations;
   uint8_t  Volume;         // Volume settings only for debugging puposes;
   uint8_t  VolumeSteps;
+  uint8_t  OutputFormat; 
   uint8_t  BtName[32];
 #pragma pack()
 } NvSettings_t;

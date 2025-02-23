@@ -4,8 +4,12 @@
 
 #include <esp_idf_version.h>
 
-#if (ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 0, 0)) || (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0))
-  #error Cannot be built with version 1.0.6 or older or version 3.0.0 or newer
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 0, 0)  // ESP32 board package 3.0.0 or newer
+  #warning unpack "AudioI2S-bsp-2xx.zip"       in directory "src"
+  #warning unpack "BluetoothA2DP-bsp-2xx.zip"  in directory "src"
+#else
+  #warning unpack "AudioI2S-bsp-3xx.zip"       in directory "src"
+  #warning unpack "BluetoothA2DP-bsp-3xx.zip"  in directory "src"
 #endif
 
 #include "src/AudioI2S/Audio.h"
@@ -324,6 +328,7 @@ static void GUI_Handler(uint8_t key) {
     case GUI_RESULT_NEW_WIFI_TX_LEVEL : SetWifiPower(Settings.NV.WifiTxIndex, true); break;
     case GUI_RESULT_NEW_BT_TX_LEVEL   : /*SetBtPower(Settings.NV.BtTxIndex, true);*/ break;
     case GUI_RESULT_NEW_VOLUME     : Player.SetVolume(Settings.NV.Volume); break;
+    case GUI_RESULT_OUTPUT_FORMAT  : Player.UpdateOutputFormat(); break;
     default: break;
   }
   #endif
@@ -355,8 +360,9 @@ static void Housekeeping(void) {
 // soft restart to assure the player get a fresh end clean environment.
 
 void setup(void) {
+  bool oled_i2c_present;
   //Serial
-  Serial.begin(115200);
+  Serial.begin(SERIAL_BAUD_RATE);
 
   //SD(SPI)
   #ifdef USE_SD_MMC
@@ -368,22 +374,42 @@ void setup(void) {
     SPI.begin(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI);
     SPI.setFrequency(1000000);
   #endif
+#if OLED_DUAL_TARGET_PORT
+  I2C_PORT_OLED.begin(PIN_SDA2, PIN_SCL2, I2C_HIGH_CLOCK_SPEED);
+  oled_i2c_present = Scan_I2C_Device(I2C_PORT_OLED, OLED_I2C_ADDRESS);
+  if(oled_i2c_present) {
+    Serial.printf("OLED on I2C bus address 0x%02X found.\n", OLED_I2C_ADDRESS); 
+    I2C_PORT_OLED.setBufferSize(256 + 8);
+  }
+  else {
+    I2C_PORT_OLED.end();
+    Serial.printf("OLED on I2C bus address 0x%02X not found; using SPI bus.\n", OLED_I2C_ADDRESS); 
+    pinMode(PIN_CS, OUTPUT);
+    pinMode(PIN_DC, OUTPUT);
+    digitalWrite(PIN_CS, HIGH);
+    digitalWrite(PIN_DC, HIGH);
+    SPI_PORT_OLED.begin(PIN_SCLK, PIN_MISO, PIN_MOSI);
+    SPI_PORT_OLED.setFrequency(SPI_OLED_CLOCK_SPEED);
+  }
+#else
   #ifdef I2C_PORT_OLED
     I2C_PORT_OLED.begin(PIN_SDA2, PIN_SCL2, I2C_HIGH_CLOCK_SPEED);
     I2C_PORT_OLED.setBufferSize(256 + 8);
+    oled_i2c_present = true;
   #else
     pinMode(PIN_CS, OUTPUT);
     pinMode(PIN_DC, OUTPUT);
     digitalWrite(PIN_CS, HIGH);
     digitalWrite(PIN_DC, HIGH);
-    SPI.begin(PIN_SCLK, PIN_MISO, PIN_MOSI);
-    SPI.setFrequency(SPI_OLED_CLOCK_SPEED);
+    SPI_PORT_OLED.begin(PIN_SCLK, PIN_MISO, PIN_MOSI);
+    SPI_PORT_OLED.setFrequency(SPI_OLED_CLOCK_SPEED);
+    oled_i2c_present = false;
   #endif
+#endif
   I2C_PORT_EEPROM.begin(PIN_SDA1, PIN_SCL1, I2C_LOW_CLOCK_SPEED);
   I2C_PORT_EEPROM.setBufferSize(256 + 8);
 
   // Buttons
-  // uint8_t boot_keys = 0;
   Settings.BootKeys = 0;
   if(digitalRead(PIN_SW1) == LOW) Settings.BootKeys |= BOOT_KEY1_MASK;
   if(digitalRead(PIN_SW2) == LOW) Settings.BootKeys |= BOOT_KEY2_MASK;
@@ -404,7 +430,7 @@ void setup(void) {
     Settings.EepromErase();        // Use this when settings have got corrupted
   }
   Settings.EepromLoad();           // Get the primary settings form EEPROM
-  Display.Initialize(Settings.isSoftRestart());
+  Display.Initialize(Settings.isSoftRestart(), !oled_i2c_present);
   if(Settings.isSoftRestart()) {   // A soft restart does not show the TimesStampClassme screen, so it
     Settings.clearSoftRestart();   // simulates an impression of a dynamically change of player.
     Settings.Play = 1;             // After a soft restart, we start playing immediately (Note: BT always starts immediately)
@@ -433,7 +459,8 @@ void setup(void) {
   Settings.SetLoopFunction(SettingsLoopFunction);
   delay(50);
   Scan_I2C(Wire, 0);
-  Scan_I2C(Wire1, 1);
+  if(oled_i2c_present)
+    Scan_I2C(Wire1, 1);
   Display.ShowBaseScreen(Settings.Play ? DISPLAY_HELP_PLEASE_WAIT : DISPLAY_HELP_PRESS_PLAY_TO_START);
   Serial.printf("Current player is \"%s\"\n", Settings.GetSourceName());
   Player.Start(Settings.Play);

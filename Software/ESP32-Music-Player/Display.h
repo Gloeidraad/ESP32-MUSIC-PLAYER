@@ -17,7 +17,7 @@
 class DisplayClass {
   public:
     DisplayClass();
-    void Initialize(bool reboot);
+    void Initialize(bool reboot, bool use_spi = false);
     void Suspend();
     void Resume();
 
@@ -27,7 +27,6 @@ class DisplayClass {
     
     void ShowReboot(void);
     void ShowPlayer(void);
-    void ShowInfo(const char * msg);
     void ShowPlayPause(void) { ShowPlayPause(Settings.Play); }
     void ShowPlayPause(bool play, bool no_queue = false);
     void ShowPlayTime(bool no_queue = false);
@@ -54,13 +53,10 @@ class DisplayClass {
     void PrepareMenuScreen(bool menu_on); // false = leaving, true = entering
     void ShowMenuStrings(const char *s1, const char *s2, const char *s3);
 
-    //void ShowFrequencies(void);
     void ShowVolume();
     void ShowVolume(uint8_t vol, uint8_t max);
 
     void loop(uint32_t timestamp);
-
-    uint8_t MenuStringMax();
 
   protected:
     void ShowLine(uint8_t y, const char *s, uint8_t font, bool no_queue = false);

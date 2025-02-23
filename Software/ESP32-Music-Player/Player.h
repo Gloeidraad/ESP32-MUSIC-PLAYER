@@ -21,6 +21,7 @@ class PlayerClass {
     void PauseResume(void);
     void AddLoopFunction(void (*f)(void)) { _loop = f; }
     void SetVolume(int vol);
+    void UpdateOutputFormat();
     uint8_t CheckBluetoothVolume(int v); 
     void SD_PrintDebug(void);
     void WP_PrintDebug(bool hex = false) { if(_waveform_player != NULL) _waveform_player->Print(hex); }

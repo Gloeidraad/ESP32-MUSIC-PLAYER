@@ -26,6 +26,7 @@ GUI_STRING MENU_SELECT_STATION  =   "Select Station"  ;
 GUI_STRING MENU_OK_CONFIRM        = "Press OK to confirm";
 GUI_STRING MENU_WIFI_TX_INDEX0    = "WiFi TX Level";
 GUI_STRING MENU_BT_TX_INDEX0      = "BT TX Level";
+GUI_STRING MENU_STEREO_MONO       = "Audio Output";
 
 /*****************************************************************************/
 /*  Playing time variables and functions                                     */
@@ -211,9 +212,9 @@ static void MenuTrackAdjust(int adj) {
   MenuValueAdjust(adj, 1, Settings.NV.DiskTotalTracks, 1);
   const char * track_name = TrackSettings.GetTrackName(menu_edit_val);
   int len = strlen(track_name);
-  strncpy(text, track_name, Display.MenuStringMax());
-  text[Display.MenuStringMax()] = '\0';
-  if(len < Display.MenuStringMax()) {
+  strncpy(text, track_name, 31);
+  text[31] = '\0';
+  if(len < 31) {
     char * p = strrchr(text, '.');
     if(p != NULL) *p = '\0'; // do not show the .mp3 extension 
   }
@@ -520,6 +521,37 @@ static int MenuBtTxLevel(int function) {
 }
 
 /*****************************************************************************/
+/*  Select Audio Format                                                      */
+/*****************************************************************************/
+
+static void MenuStereoMonoAdjust(int adj) {
+  if(adj) Settings.NV.OutputFormat = !Settings.NV.OutputFormat;
+  const char * output_mode = Settings.NV.OutputFormat ? "Mono" : "Stereo";
+  Display.ShowMenuStrings(NULL, output_mode, NULL);  
+}
+
+static int MenuStereoMono(int function) {
+  const char * output_mode = Settings.NV.OutputFormat ? "Mono" : "Stereo";
+  switch(function) {
+    case MENU_FUNC_INIT     : Serial.println("OMT Menu Stereo/Mono");
+                              Display.ShowMenuStrings(MENU_STEREO_MONO, NULL, "");
+                              MenuStereoMonoAdjust(0);
+                              break;
+    case MENU_FUNC_TICK     : if(--menu_delay_100ms == 0)
+                                return GUI_RESULT_TIMEOUT;
+                              break;
+    case MENU_FUNC_KEY_UP   : 
+    case MENU_FUNC_KEY_DN   : MenuStereoMonoAdjust(1);
+                              MENU_RESET_TIMEOUT(MENU_DELAY_PLAYER);
+                              return GUI_RESULT_OUTPUT_FORMAT;
+    case MENU_FUNC_KEY_OK   : break;
+    case MENU_FUNC_KEY_MENU : return MENU_RESULT_EXIT;
+    case MENU_FUNC_EXIT     : break;
+  };
+  return GUI_RESULT_NOP;
+}
+
+/*****************************************************************************/
 /*  Menu function selector                                                   */
 /*****************************************************************************/
 
@@ -538,10 +570,11 @@ typedef struct {
 #define MENU_INDEX_TIME            3
 #define MENU_INDEX_SSID            4
 #define MENU_INDEX_SOURCE          5
-#define MENU_INDEX_VOLUME          6 // Not used in this application
-#define MENU_INDEX_SETUP_TX_LEVEL1 7
-#define MENU_INDEX_SETUP_TX_LEVEL2 8
-#define MENU_INDEX_COUNT           9
+#define MENU_INDEX_STEREO_MONO     6
+#define MENU_INDEX_VOLUME          7 // Not used in this application
+#define MENU_INDEX_SETUP_TX_LEVEL1 8
+#define MENU_INDEX_SETUP_TX_LEVEL2 9
+#define MENU_INDEX_COUNT           10
 
 #define MENU_INDEX_DEFAULT         MENU_INDEX_PLAYER
 static MenuType MenuEntries[MENU_INDEX_COUNT] = {
@@ -550,7 +583,8 @@ static MenuType MenuEntries[MENU_INDEX_COUNT] = {
   { MenuStation,         MENU_INDEX_TIME,            0,1 },
   { MenuTime,            MENU_INDEX_SSID,            0,1 },
   { MenuSelectSsid,      MENU_INDEX_SOURCE,          0,1 },
-  { MenuSource,          MENU_INDEX_SETUP_TX_LEVEL1, 0,1 },
+  { MenuSource,          MENU_INDEX_STEREO_MONO,     0,1 },
+  { MenuStereoMono,      MENU_INDEX_SETUP_TX_LEVEL1, 0,1 },
   { MenuWifiTxLevel,     MENU_INDEX_SETUP_TX_LEVEL2, 0,0 },
   { MenuBtTxLevel,       MENU_INDEX_DEFAULT,         0,0 }
 };

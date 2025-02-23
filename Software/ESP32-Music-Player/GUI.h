@@ -15,6 +15,7 @@
 #define GUI_RESULT_NEW_WIFI_TX_LEVEL  111
 #define GUI_RESULT_NEW_BT_TX_LEVEL    112
 #define GUI_RESULT_NEW_VOLUME         113
+#define GUI_RESULT_OUTPUT_FORMAT      114
 
 void GuiInit();
 int  GuiCallback(int key_press);

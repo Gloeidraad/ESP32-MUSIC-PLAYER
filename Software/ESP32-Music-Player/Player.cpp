@@ -1,4 +1,9 @@
+// Remark:  Please check in "Hardware/Board.h" that:
+// USE_SD_MMC is defined
+// DAC_ID is set to DAC_ID_MAX98357A
+
 #include "src/ChipInfo.h"
+#include "src/Hardware/Board.h"
 #include "esp_wifi.h"
 #include "Display.h"
 #include "SimpleWaveGenerator.h"
@@ -236,6 +241,7 @@ void PlayerClass::Start(bool autoplay) {
                                    Settings.TotalTrackTime   = Settings.NV.DiskTrackTotalTime;
                                  }
                                  _audio = new Audio;
+                                 _audio->forceMono(Settings.NV.OutputFormat);
                                  _audio->setPinout(PIN_I2S_BCK, PIN_I2S_WS, PIN_I2S_DOUT);
                                  _audio->setHeaderTimeout(10000);  // Using OMT expansion
                                  #if DAC_ID == DAC_ID_PT8211
@@ -246,18 +252,26 @@ void PlayerClass::Start(bool autoplay) {
                                  #endif
                                  break;
     case SET_SOURCE_BLUETOOTH  : Display.ShowHelpLine("Setting up Bluetooth");
-#if ESP_IDF_VERSION_MAJOR == 5  // OMT: under development
-#error
-static I2SClass i2s;
-_a2dp_sink = new BluetoothA2DPSink(i2s);
-i2s.setPins(PIN_I2S_BCK, PIN_I2S_WS, PIN_I2S_DOUT);
-if(!i2s.begin(I2S_MODE_STD, 44100, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO, I2S_STD_SLOT_BOTH)) {
-  Serial.println("Failed to initialize I2S!");
-  while (1); // do nothing
-}
-_a2dp_sink->start("MyMusic");
-
-#else
+                              #if ESP_IDF_VERSION_MAJOR == 5
+                                 static I2SClass i2s;
+                                 i2s.setPins(PIN_I2S_BCK, PIN_I2S_WS, PIN_I2S_DOUT);
+                                 if(!i2s.begin(I2S_MODE_STD, 44100, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO, I2S_STD_SLOT_BOTH)) {
+                                   Serial.println("Failed to initialize I2S!");
+                                   while(1) delay(100); // do nothing
+                                 }
+                                 if(DAC_ID == DAC_ID_PT8211) {
+                                   i2s_std_config_t i2s_std_cfg;
+                                   i2s_chan_handle_t h = i2s.txChan();
+                                   i2s_channel_disable(h);
+                                   i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+                                   i2s_channel_reconfig_std_slot(h, &i2s_std_cfg.slot_cfg);
+                                   i2s_channel_enable(h);
+                                 }
+                                 //_a2dp_sink = new BluetoothA2DPSink(i2s); // for some reason a dymamically a2dp_sink causes a reset loop
+                                 static BluetoothA2DPSink a2dp_sink(i2s);   // so, we use a static vesion...
+                                 _a2dp_sink = &a2dp_sink;
+                                 { 
+                              #else // Note: needs older version of AudioI2S
                                  _a2dp_sink = new BluetoothA2DPSink;
                                  if(_a2dp_sink == NULL)
                                    Serial.println("Error creating BluetoothA2DPSink");
@@ -285,7 +299,9 @@ _a2dp_sink->start("MyMusic");
                                        .tx_desc_auto_clear = true // avoiding noise in case of data unavailability
                                      };
                                      _a2dp_sink->set_i2s_config(my_i2s_config);
-                                   #endif                                   
+                                   #endif 
+                              #endif 
+                                   _a2dp_sink->set_mono_downmix(Settings.NV.OutputFormat);                             
                                    _a2dp_sink->set_avrc_metadata_callback(avrc_metadata_callback);
                                    //_a2dp_sink->set_sample_rate_callback(sample_rate_callback);
                                    _a2dp_sink->set_on_volumechange(bt_volumechange);
@@ -297,7 +313,6 @@ _a2dp_sink->start("MyMusic");
                                    //_a2dp_sink->set_volume(BLUETOOTH_VOLUME_MAX);
                                    Display.ShowHelpLine((const char *)Settings.NV.BtName);
                                  }
-#endif
                                  _activity_counter = 0;
                                  break;
     case SET_SOURCE_WEB_RADIO  :{uint64_t timestamp_us = esp_timer_get_time();
@@ -343,6 +358,7 @@ _a2dp_sink->start("MyMusic");
                                    }
                                  }
                                  _audio = new Audio;
+                                 _audio->forceMono(Settings.NV.OutputFormat);
                                  _audio->setPinout(PIN_I2S_BCK, PIN_I2S_WS, PIN_I2S_DOUT);
                                  #if DAC_ID == DAC_ID_PT8211
                                    _audio->setI2SCommFMT_LSB(true);
@@ -511,6 +527,11 @@ IRAM_ATTR void PlayerClass::loop(bool ten_ms_tick, bool seconds_tick) {
     default:                     break;
   }
   Display.loop(ten_ms_tick); 
+}
+
+void PlayerClass::UpdateOutputFormat() {
+   if( _audio != NULL) _audio->forceMono(Settings.NV.OutputFormat);
+   if(_a2dp_sink != NULL) _a2dp_sink->set_mono_downmix(Settings.NV.OutputFormat);
 }
 
 void PlayerClass::PlayNew(void) {
@@ -696,7 +717,7 @@ void audio_icydescription(const char* info) {
 
 #endif
 
-void audio_commercial(const char *info){  //duration in sec
+void audio_commercial(const char *info) {  //duration in sec
   Serial.print("commercial  ");Serial.println(info);
 }
 

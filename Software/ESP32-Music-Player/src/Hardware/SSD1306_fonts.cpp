@@ -1802,7 +1802,8 @@ static const uint8_t font_8x16_data['~' - '!' + 1][16] = {
 #endif
 
 #ifdef USE_8X8_FONT
-static const uint8_t font_8x8_data[0xAF - '!' + 1][8] = {
+static const uint8_t font_8x8_data[][8] = {
+  0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,  // hex 0x21, ASCII ' '
   0x00,0x00,0x00,0x5F,0x5F,0x00,0x00,0x00,  // hex 0x21, ASCII '!'
   0x00,0x07,0x07,0x00,0x07,0x07,0x00,0x00,  // hex 0x22, ASCII '"'
   0x14,0x7F,0x7F,0x14,0x7F,0x7F,0x14,0x00,  // hex 0x23, ASCII '#'
@@ -1855,7 +1856,7 @@ static const uint8_t font_8x8_data[0xAF - '!' + 1][8] = {
   0x7F,0x7F,0x09,0x19,0x39,0x6F,0x46,0x00,  // hex 0x52, ASCII 'R'
   0x26,0x6F,0x49,0x49,0x49,0x7B,0x32,0x00,  // hex 0x53, ASCII 'S'
   0x01,0x01,0x01,0x7F,0x7F,0x01,0x01,0x01,  // hex 0x54, ASCII 'T'
-  0x7F,0x7F,0x40,0x40,0x40,0x7F,0x7F,0x00,  // hex 0x55, ASCII 'U'
+  0x3F,0x7F,0x40,0x40,0x40,0x7F,0x7F,0x00,  // hex 0x55, ASCII 'U'
   0x1F,0x3F,0x60,0x60,0x60,0x3F,0x1F,0x00,  // hex 0x56, ASCII 'V'
   0x3F,0x7F,0x60,0x30,0x60,0x7F,0x3F,0x00,  // hex 0x57, ASCII 'W'
   0x63,0x77,0x1C,0x08,0x1C,0x77,0x63,0x00,  // hex 0x58, ASCII 'X'
@@ -1865,7 +1866,7 @@ static const uint8_t font_8x8_data[0xAF - '!' + 1][8] = {
   0x01,0x03,0x06,0x0C,0x18,0x30,0x60,0x00,  // hex 0x5C, ASCII '\'
   0x00,0x00,0x41,0x41,0x7F,0x7F,0x00,0x00,  // hex 0x5D, ASCII ']'
   0x08,0x0C,0x06,0x03,0x06,0x0C,0x08,0x00,  // hex 0x5E, ASCII '^'
-  0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,  // hex 0x5F, ASCII '_'
+  0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,  // hex 0x5F, ASCII '_'
   0x00,0x00,0x00,0x03,0x07,0x04,0x00,0x00,  // hex 0x60, ASCII '`'
   0x20,0x74,0x54,0x54,0x54,0x7C,0x78,0x00,  // hex 0x61, ASCII 'a'
   0x7F,0x7F,0x48,0x48,0x48,0x78,0x30,0x00,  // hex 0x62, ASCII 'b'
@@ -1898,17 +1899,8 @@ static const uint8_t font_8x8_data[0xAF - '!' + 1][8] = {
   0x00,0x41,0x41,0x77,0x3E,0x08,0x08,0x00,  // hex 0x7D, ASCII '}'
   0x02,0x03,0x01,0x03,0x02,0x03,0x01,0x00,  // hex 0x7E, ASCII '~'
   //0x70,0x78,0x4C,0x46,0x4C,0x78,0x70,0x00,  // hex 0x7F, ASCII 'DEL'
-  //0xFC,0xFC,0x20,0x20,0x20,0x3C,0x1C,0x00,  // hex 0x7F, ASCII 'micro'
-  // 0 0 0 0 0 0 0 0
-  // 0 0 0 0 0 0 0 0
-  // X X 0 0 0 X X 0
-  // X X 0 0 0 X X 0
-  // X X 0 0 0 X X 0
-  // X X X X X X 0 0
-  // X X 0 0 0 0 0 0
-  // X X 0 0 0 0 0 0
-  0x00,0x66,0x66,0x00,0x00,0x00,0x00,0x00,  // hex 0x3A, ASCII ':' shift left
-
+  0xFC,0xFC,0x20,0x20,0x20,0x3C,0x1C,0x00,  // hex 0x7F, ASCII 'micro'
+  //0x00,0x66,0x66,0x00,0x00,0x00,0x00,0x00,  // hex 0x3A, ASCII ':' shift left
   0x3E,0x7F,0xC1,0xE1,0x41,0x63,0x22,0x00,  // hex 0x80, ASCII 'C cedille'
   0x3D,0x7D,0x40,0x40,0x40,0x7D,0x7D,0x00,  // hex 0x81, ASCII '��'
   0x38,0x7C,0x54,0x54,0x55,0x5D,0x19,0x00,  // hex 0x82, ASCII '�'
@@ -1968,10 +1960,116 @@ static const uint8_t font_8x8_data[0xAF - '!' + 1][8] = {
   0x08,0x1C,0x36,0x22,0x08,0x1C,0x36,0x22,  // hex 0xAE, ASCII '<<'
   0x22,0x36,0x1C,0x08,0x22,0x36,0x1C,0x08   // hex 0xAF, ASCII '>>'
 };
+
+#define F_OFFS(i) (i * sizeof(font_8x8_data[0]))
+
+//const ssd1306_font_descriptor_t font_8x8_descriptor[sizeof(font_8x8_data)/sizeof(font_8x8_data[0])] = {
+const ssd1306_font_descriptor_t font_8x8_descriptor[96] = { // Use only the printable ASCII part
+  4,0,F_OFFS(0),   // hex 0x21, ASCII ' '
+  2,3,F_OFFS(1),   // hex 0x21, ASCII '!'
+  5,1,F_OFFS(2),   // hex 0x22, ASCII '"'
+  7,0,F_OFFS(3),   // hex 0x23, ASCII '#'
+  7,0,F_OFFS(4),   // hex 0x24, ASCII '$'
+  7,0,F_OFFS(5),   // hex 0x25, ASCII '%'
+  7,0,F_OFFS(6),   // hex 0x26, ASCII '&'
+  3,1,F_OFFS(7),   // hex 0x27, ASCII '''
+  4,2,F_OFFS(8),   // hex 0x28, ASCII '('
+  4,2,F_OFFS(9),   // hex 0x29, ASCII ')'
+  8,0,F_OFFS(10),  // hex 0x2A, ASCII '*'
+  6,1,F_OFFS(11),  // hex 0x2B, ASCII '+'
+  3,2,F_OFFS(12),  // hex 0x2C, ASCII ','
+  6,1,F_OFFS(13),  // hex 0x2D, ASCII '-'
+  2,3,F_OFFS(14),  // hex 0x2E, ASCII '.'
+  7,0,F_OFFS(15),  // hex 0x2F, ASCII '/'
+  7,0,F_OFFS(16),  // hex 0x30, ASCII '0'
+  4,2,F_OFFS(17),  // hex 0x31, ASCII '1'
+  7,0,F_OFFS(18),  // hex 0x32, ASCII '2'
+  6,1,F_OFFS(19),  // hex 0x33, ASCII '3'
+  7,0,F_OFFS(20),  // hex 0x34, ASCII '4'
+  7,0,F_OFFS(21),  // hex 0x35, ASCII '5'
+  7,0,F_OFFS(22),  // hex 0x36, ASCII '6'
+  5,1,F_OFFS(23),  // hex 0x37, ASCII '7'
+  7,0,F_OFFS(24),  // hex 0x38, ASCII '8'
+  7,0,F_OFFS(25),  // hex 0x39, ASCII '9'
+  2,3,F_OFFS(26),  // hex 0x3A, ASCII ':'
+  3,2,F_OFFS(27),  // hex 0x3B, ASCII ';'
+  5,1,F_OFFS(28),  // hex 0x3C, ASCII '<'
+  6,1,F_OFFS(29),  // hex 0x3D, ASCII '='
+  5,2,F_OFFS(30),  // hex 0x3E, ASCII '>'
+  6,1,F_OFFS(31),  // hex 0x3F, ASCII '?'
+  7,0,F_OFFS(32),  // hex 0x40, ASCII '@'
+  7,0,F_OFFS(33),  // hex 0x41, ASCII 'A'
+  7,0,F_OFFS(34),  // hex 0x42, ASCII 'B'
+  7,0,F_OFFS(35),  // hex 0x43, ASCII 'C'
+  7,0,F_OFFS(36),  // hex 0x44, ASCII 'D'
+  6,0,F_OFFS(37),  // hex 0x45, ASCII 'E'
+  6,0,F_OFFS(38),  // hex 0x46, ASCII 'F'
+  7,0,F_OFFS(39),  // hex 0x47, ASCII 'G'
+  7,0,F_OFFS(40),  // hex 0x48, ASCII 'H'
+  4,2,F_OFFS(41),  // hex 0x49, ASCII 'I'
+  7,0,F_OFFS(42),  // hex 0x4A, ASCII 'J'
+  7,0,F_OFFS(43),  // hex 0x4B, ASCII 'K'
+  6,0,F_OFFS(44),  // hex 0x4C, ASCII 'L'
+  7,0,F_OFFS(45),  // hex 0x4D, ASCII 'M'
+  7,0,F_OFFS(46),  // hex 0x4E, ASCII 'N'
+  7,0,F_OFFS(47),  // hex 0x4F, ASCII 'O'
+  7,0,F_OFFS(48),  // hex 0x50, ASCII 'P'
+  7,0,F_OFFS(49),  // hex 0x51, ASCII 'Q'
+  7,0,F_OFFS(50),  // hex 0x52, ASCII 'R'
+  7,0,F_OFFS(51),  // hex 0x53, ASCII 'S'
+  6,1,F_OFFS(52),  // hex 0x54, ASCII 'T'
+  7,0,F_OFFS(53),  // hex 0x55, ASCII 'U'
+  7,0,F_OFFS(54),  // hex 0x56, ASCII 'V'
+  7,0,F_OFFS(55),  // hex 0x57, ASCII 'W'
+  7,0,F_OFFS(56),  // hex 0x58, ASCII 'X'
+  7,0,F_OFFS(57),  // hex 0x59, ASCII 'Y'
+  7,0,F_OFFS(58),  // hex 0x5A, ASCII 'Z'
+  4,2,F_OFFS(59),  // hex 0x5B, ASCII '['
+  7,0,F_OFFS(60),  // hex 0x5C, ASCII '\'
+  4,2,F_OFFS(61),  // hex 0x5D, ASCII ']'
+  7,0,F_OFFS(62),  // hex 0x5E, ASCII '^'
+  6,0,F_OFFS(63),  // hex 0x5F, ASCII '_'
+  3,3,F_OFFS(64),  // hex 0x60, ASCII '`'
+  7,0,F_OFFS(65),  // hex 0x61, ASCII 'a'
+  7,0,F_OFFS(66),  // hex 0x62, ASCII 'b'
+  7,0,F_OFFS(67),  // hex 0x63, ASCII 'c'
+  7,0,F_OFFS(68),  // hex 0x64, ASCII 'd'
+  7,0,F_OFFS(69),  // hex 0x65, ASCII 'e'
+  6,1,F_OFFS(70),  // hex 0x66, ASCII 'f'
+  7,0,F_OFFS(71),  // hex 0x67, ASCII 'g'
+  7,0,F_OFFS(72),  // hex 0x68, ASCII 'h'
+  4,2,F_OFFS(73),  // hex 0x69, ASCII 'i'
+  7,0,F_OFFS(74),  // hex 0x6A, ASCII 'j'
+  7,0,F_OFFS(75),  // hex 0x6B, ASCII 'k'
+  4,2,F_OFFS(76),  // hex 0x6C, ASCII 'l'
+  7,0,F_OFFS(77),  // hex 0x6D, ASCII 'm'
+  7,0,F_OFFS(78),  // hex 0x6E, ASCII 'n'
+  7,0,F_OFFS(79),  // hex 0x6F, ASCII 'o'
+  7,0,F_OFFS(80),  // hex 0x70, ASCII 'p'
+  7,0,F_OFFS(81),  // hex 0x71, ASCII 'q'
+  7,0,F_OFFS(82),  // hex 0x72, ASCII 'r'
+  7,0,F_OFFS(83),  // hex 0x73, ASCII 's'
+  5,2,F_OFFS(84),  // hex 0x74, ASCII 't'
+  7,0,F_OFFS(85),  // hex 0x75, ASCII 'u'
+  7,0,F_OFFS(86),  // hex 0x76, ASCII 'v'
+  7,0,F_OFFS(87),  // hex 0x77, ASCII 'w'
+  7,0,F_OFFS(88),  // hex 0x78, ASCII 'x'
+  7,0,F_OFFS(89),  // hex 0x79, ASCII 'y'
+  7,0,F_OFFS(90),  // hex 0x7A, ASCII 'z'
+  6,1,F_OFFS(91),  // hex 0x7B, ASCII '{'
+  2,3,F_OFFS(92),  // hex 0x7C, ASCII '|'
+  6,1,F_OFFS(93),  // hex 0x7D, ASCII '}'
+  7,0,F_OFFS(94),  // hex 0x7E, ASCII '~'
+  7,0,F_OFFS(95),  // hex 0x7F, ASCII 'DEL'
+};
+
+#undef F_OFFS
+
 #endif
 
 #ifdef USE_5X8_FONT
-static const uint8_t font_5x8_data['}' - '!' + 1][5] = {
+static const uint8_t font_5x8_data['}' - ' ' + 1][5] = {
+    0x00,0x00,0x00,0x00,0x00, /*   */
     0x00,0x00,0x4f,0x00,0x00, /* ! */
     0x00,0x07,0x00,0x07,0x00, /* " */
     0x14,0x7f,0x14,0x7f,0x14, /* # */
@@ -2066,6 +2164,111 @@ static const uint8_t font_5x8_data['}' - '!' + 1][5] = {
     0x00,0x00,0x77,0x00,0x00, /* | */
     0x00,0x41,0x41,0x36,0x08, /* } */
 };
+
+#define F_OFFS(i) (i * sizeof(font_5x8_data[0]))
+
+const ssd1306_font_descriptor_t font_5x8_descriptor[sizeof(font_8x8_data)/sizeof(font_5x8_data[0])] = {
+  2,0,F_OFFS(0),   // hex 0x21, ASCII ' '
+  1,2,F_OFFS(1),   // hex 0x21, ASCII '!'
+  3,1,F_OFFS(2),   // hex 0x22, ASCII '"'
+  5,0,F_OFFS(3),   // hex 0x23, ASCII '#'
+  5,0,F_OFFS(4),   // hex 0x24, ASCII '$'
+  5,0,F_OFFS(5),   // hex 0x25, ASCII '%'
+  5,0,F_OFFS(6),   // hex 0x26, ASCII '&'
+  2,1,F_OFFS(7),   // hex 0x27, ASCII '''
+  3,2,F_OFFS(8),   // hex 0x28, ASCII '('
+  3,0,F_OFFS(9),   // hex 0x29, ASCII ')'
+  5,0,F_OFFS(10),  // hex 0x2A, ASCII '*'
+  5,0,F_OFFS(11),  // hex 0x2B, ASCII '+'
+  2,0,F_OFFS(12),  // hex 0x2C, ASCII ','
+  4,1,F_OFFS(13),  // hex 0x2D, ASCII '-'
+  2,1,F_OFFS(14),  // hex 0x2E, ASCII '.'
+  5,0,F_OFFS(15),  // hex 0x2F, ASCII '/'
+  5,0,F_OFFS(16),  // hex 0x30, ASCII '0'
+  3,1,F_OFFS(17),  // hex 0x31, ASCII '1'
+  5,0,F_OFFS(18),  // hex 0x32, ASCII '2'
+  5,0,F_OFFS(19),  // hex 0x33, ASCII '3'
+  5,0,F_OFFS(20),  // hex 0x34, ASCII '4'
+  5,0,F_OFFS(21),  // hex 0x35, ASCII '5'
+  5,0,F_OFFS(22),  // hex 0x36, ASCII '6'
+  5,0,F_OFFS(23),  // hex 0x37, ASCII '7'
+  5,0,F_OFFS(24),  // hex 0x38, ASCII '8'
+  5,0,F_OFFS(25),  // hex 0x39, ASCII '9'
+  2,1,F_OFFS(26),  // hex 0x3A, ASCII ':'
+  2,1,F_OFFS(27),  // hex 0x3B, ASCII ';'
+  4,0,F_OFFS(28),  // hex 0x3C, ASCII '<'
+  4,0,F_OFFS(29),  // hex 0x3D, ASCII '='
+  4,1,F_OFFS(30),  // hex 0x3E, ASCII '>'
+  5,0,F_OFFS(31),  // hex 0x3F, ASCII '?'
+  5,0,F_OFFS(32),  // hex 0x40, ASCII '@'
+  5,0,F_OFFS(33),  // hex 0x41, ASCII 'A'
+  5,0,F_OFFS(34),  // hex 0x42, ASCII 'B'
+  5,0,F_OFFS(35),  // hex 0x43, ASCII 'C'
+  5,0,F_OFFS(36),  // hex 0x44, ASCII 'D'
+  5,0,F_OFFS(37),  // hex 0x45, ASCII 'E'
+  5,0,F_OFFS(38),  // hex 0x46, ASCII 'F'
+  5,0,F_OFFS(39),  // hex 0x47, ASCII 'G'
+  5,0,F_OFFS(40),  // hex 0x48, ASCII 'H'
+  3,1,F_OFFS(41),  // hex 0x49, ASCII 'I'
+  5,0,F_OFFS(42),  // hex 0x4A, ASCII 'J'
+  5,0,F_OFFS(43),  // hex 0x4B, ASCII 'K'
+  5,0,F_OFFS(44),  // hex 0x4C, ASCII 'L'
+  5,0,F_OFFS(45),  // hex 0x4D, ASCII 'M'
+  5,0,F_OFFS(46),  // hex 0x4E, ASCII 'N'
+  5,0,F_OFFS(47),  // hex 0x4F, ASCII 'O'
+  5,0,F_OFFS(48),  // hex 0x50, ASCII 'P'
+  5,0,F_OFFS(49),  // hex 0x51, ASCII 'Q'
+  5,0,F_OFFS(50),  // hex 0x52, ASCII 'R'
+  5,0,F_OFFS(51),  // hex 0x53, ASCII 'S'
+  5,0,F_OFFS(52),  // hex 0x54, ASCII 'T'
+  5,0,F_OFFS(53),  // hex 0x55, ASCII 'U'
+  5,0,F_OFFS(54),  // hex 0x56, ASCII 'V'
+  5,0,F_OFFS(55),  // hex 0x57, ASCII 'W'
+  5,0,F_OFFS(56),  // hex 0x58, ASCII 'X'
+  5,0,F_OFFS(57),  // hex 0x59, ASCII 'Y'
+  5,0,F_OFFS(58),  // hex 0x5A, ASCII 'Z'
+  3,1,F_OFFS(59),  // hex 0x5B, ASCII '['
+  5,0,F_OFFS(60),  // hex 0x5C, ASCII '\'
+  3,1,F_OFFS(61),  // hex 0x5D, ASCII ']'
+
+  5,0,F_OFFS(62),  // hex 0x5E, ASCII '^'
+  4,0,F_OFFS(63),  // hex 0x5F, ASCII '_'
+  2,2,F_OFFS(64),  // hex 0x60, ASCII '`'
+  5,0,F_OFFS(65),  // hex 0x61, ASCII 'a'
+  5,0,F_OFFS(66),  // hex 0x62, ASCII 'b'
+  5,0,F_OFFS(67),  // hex 0x63, ASCII 'c'
+  5,0,F_OFFS(68),  // hex 0x64, ASCII 'd'
+  5,0,F_OFFS(69),  // hex 0x65, ASCII 'e'
+  4,1,F_OFFS(70),  // hex 0x66, ASCII 'f'
+  5,0,F_OFFS(71),  // hex 0x67, ASCII 'g'
+  5,0,F_OFFS(72),  // hex 0x68, ASCII 'h'
+  3,1,F_OFFS(73),  // hex 0x69, ASCII 'i'
+  4,0,F_OFFS(74),  // hex 0x6A, ASCII 'j'
+  4,0,F_OFFS(75),  // hex 0x6B, ASCII 'k'
+  3,1,F_OFFS(76),  // hex 0x6C, ASCII 'l'
+  5,0,F_OFFS(77),  // hex 0x6D, ASCII 'm'
+  5,0,F_OFFS(78),  // hex 0x6E, ASCII 'n'
+  5,0,F_OFFS(79),  // hex 0x6F, ASCII 'o'
+  5,0,F_OFFS(80),  // hex 0x70, ASCII 'p'
+  5,0,F_OFFS(81),  // hex 0x71, ASCII 'q'
+  4,0,F_OFFS(82),  // hex 0x72, ASCII 'r'
+  5,0,F_OFFS(83),  // hex 0x73, ASCII 's'
+  4,1,F_OFFS(84),  // hex 0x74, ASCII 't'
+  5,0,F_OFFS(85),  // hex 0x75, ASCII 'u'
+  5,0,F_OFFS(86),  // hex 0x76, ASCII 'v'
+  5,0,F_OFFS(87),  // hex 0x77, ASCII 'w'
+  5,0,F_OFFS(88),  // hex 0x78, ASCII 'x'
+  5,0,F_OFFS(89),  // hex 0x79, ASCII 'y'
+  5,0,F_OFFS(90),  // hex 0x7A, ASCII 'z'
+  4,0,F_OFFS(91),  // hex 0x7B, ASCII '{'
+  1,2,F_OFFS(92),  // hex 0x7C, ASCII '|'
+  4,1,F_OFFS(93),  // hex 0x7D, ASCII '}'
+  5,0,F_OFFS(94),  // hex 0x7E, ASCII '~'
+  5,0,F_OFFS(95),  // hex 0x7F, ASCII 'DEL'
+};
+
+#undef F_OFFS
+
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -2236,7 +2439,7 @@ const char numfont_5x8_data[14][5] = {
   // X O O O X
   // X O O O X
   // O X X X O
-  // O O 0 O O
+  // O O O O O
   0x40,0x42,0x7F,0x40,0x40, // 1
   // O O X O O
   // O X X O O
@@ -2321,12 +2524,12 @@ const char numfont_5x8_data[14][5] = {
   0x00,0x00,0x66,0x00,0x00, // :
   // O O O O O
   // O O X O O
-  // O 0 X O O
-  // O 0 0 O O
+  // O O X O O
+  // O O O O O
   // O O O O O
   // O O X O O
-  // O 0 X O O
-  // O 0 0 O O
+  // O O X O O
+  // O O O O O
 };
 
 static const uint8_t numfont_6x8_data[14][6] = {
@@ -2455,19 +2658,21 @@ static const uint8_t numfont_6x8_data[14][6] = {
   // O O O O O O
   // O O X X O O
   // O O X X O O
-  // O O O O O O
+  // O O O O O O 
 };
 
-const SSD1306_Font_t SSD1306_Fonts[NUMBER_OF_SSD1306_FONTS] = {
-  { 4, 5, 1, sizeof(numfont_4x8_data[0]), '-', ':', 25, (uint8_t *)numfont_4x8_data },
-  { 5, 6, 1, sizeof(numfont_5x8_data[0]), '-', ':', 21, (uint8_t *)numfont_5x8_data },
-  { 6, 7, 1, sizeof(numfont_6x8_data[0]), '-', ':', 18, (uint8_t *)numfont_6x8_data },
-  { 8, 8, 1, sizeof(font_8x8_data[0]),    '!', 0xAF,16, (uint8_t *)font_8x8_data    },
-  { 5, 7, 1, sizeof(font_5x8_data[0]),    '!', '}', 18, (uint8_t *)font_5x8_data    },
-  { 5, 6, 1, sizeof(font_5x8_data[0]),    '!', '}', 21, (uint8_t *)font_5x8_data    },
+const ssd1306_font_t ssd1306_fonts[NUMBER_OF_SSD1306_FONTS] = {
+  { 4, 1, 1, sizeof(numfont_4x8_data[0]), '-', ':', 25, (uint8_t *)numfont_4x8_data, 0 },
+  { 5, 1, 1, sizeof(numfont_5x8_data[0]), '-', ':', 21, (uint8_t *)numfont_5x8_data, 0 },
+  { 6, 1, 1, sizeof(numfont_6x8_data[0]), '-', ':', 18, (uint8_t *)numfont_6x8_data, 0 },
+  { 8, 0, 1, sizeof(font_8x8_data[0]),    ' ', 0xAF,16, (uint8_t *)font_8x8_data,    0 },
+  { 5, 2, 1, sizeof(font_5x8_data[0]),    ' ', '}', 18, (uint8_t *)font_5x8_data,    0 },
+  { 5, 1, 1, sizeof(font_5x8_data[0]),    ' ', '}', 21, (uint8_t *)font_5x8_data,    0 },
 #ifdef USE_FONT_8X16_ALPHANUM
-  { 8,10, 2, sizeof(font_8x16_data[0]),   '0', 'Z', 13, (uint8_t *)font_8x16_data   }
+  { 8, 2, 2, sizeof(font_8x16_data[0]),   '0', 'Z', 13, (uint8_t *)font_8x16_data,   0 },
 #else
-  { 8,10, 2, sizeof(font_8x16_data[0]),   '!', '~', 13, (uint8_t *)font_8x16_data   }
+  { 8, 2, 2, sizeof(font_8x16_data[0]),   '!', '~', 13, (uint8_t *)font_8x16_data,   0 },
 #endif
+  { 5, 1, 1, sizeof(font_5x8_data[0]),    ' ', '}', 21, (uint8_t *)font_5x8_data,    font_5x8_descriptor},
+  { 8, 1, 1, sizeof(font_8x8_data[0]),    ' ', 0x7F,16, (uint8_t *)font_8x8_data,    font_8x8_descriptor},
 };

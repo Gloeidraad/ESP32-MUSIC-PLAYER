@@ -1,8 +1,10 @@
 #include <arduino.h>
+#include "hal/gpio_ll.h"
 
 #include "SSD1306.h"
 
-#define font_id SSD1306_FontId_t
+#define font_t    ssd1306_font_t
+#define font_id_t ssd1306_font_id_t
 
 #define SH1106_CONTROLLER      1  // Set to 1 if you want to support SH1106 also, instead of SSD1306 only 
 #define SH1106_LCDWIDTH      132  // Internally 132 pixels, visible 128 pixels
@@ -37,8 +39,7 @@
 #define SH1106_CMD_SCRL_STOP (uint8_t)0x2E // Deactivate scroll
 #define SH1106_CMD_SCRL_ACT  (uint8_t)0x2F // Activate scroll
 
-// 
-#define SSD1306_LCDMEMSIZE          (SSD1306_LCDWIDTH * SSD1306_LCDROWS)
+#define SSD1306_LCDMEMSIZE          (OLED_LCDWIDTH * OLED_LCDROWS)
 
 #define SSD1306_SH1106_SET_COL_LOW(a)   (SH1106_CMD_COL_LOW | a)  
 #define SSD1306_SH1106_SET_COL_HIGH(a)  (SH1106_CMD_COL_HIGH | a) 
@@ -80,8 +81,9 @@
 //#define SSD1306_SWITCHCAPVCC        0x2
 
 #define SSD1306_SH1106_SETPAGEADDRESS(p)   (0xB0 | (p))  
- 
-#define SSD1306_I2C_ADDRESS   0x3C  // on PIC: 0x78
+
+#define SSD1306_I2C_ADDRESS   OLED_I2C_ADDRESS
+
 // Default speeds
 #define SSD1306_I2C_SPEED     400000    // 400 kHz according to dataheets
 #if SH1106_CONTROLLER
@@ -90,21 +92,20 @@
   #define SSD1306_SPI_SPEED   10000000  // SSD1306 = 10 MHz according to dataheets
 #endif
 
-// Some shorthand helpers for font list
-#define FONT               SSD1306_Fonts[_font]
-#define FONT_FIRST_CHAR    FONT.u8FirstChar
-#define FONT_LAST_CHAR     FONT.u8LastChar
-#define FONT_DATA_COLS     FONT.u8DataCols
-#define FONT_DATA_ROWS     FONT.u8DataRows
-#define FONT_DATA_LAST_COL (FONT_DATA_COLS - 1)
-#define FONT_DATA_LAST_ROW (FONT_DATA_ROWS - 1)
-#define FONT_CHAR_SIZE     (FONT_DATA_COLS * FONT_DATA_ROWS)
-#define FONT_WIDTH         FONT.u8FontWidth
-#define FONT_HEIGHT        (FONT_DATA_ROWS * 8)
-#define FONT_LINE_LENGTH   FONT.u8LineLength
-#define FONT_DATA          FONT.au8FontTable
+// Some shorthand helper functions for font list
 
-#define GET_FONT_DATA(f,c) (f->au8FontTable + (c - f->u8FirstChar) * f->u8BytesPerChar)
+inline const uint8_t * GET_FONT_DATA(const font_t * f, uint8_t c) {
+  c -= f->first_char;
+  if(f->font_descriptor == NULL)
+    return f->font_bitmap + c * f->char_size;
+  return f->font_bitmap + f->font_descriptor[c].offset + f->font_descriptor[c].cshift;
+}
+
+inline uint8_t GET_FONT_CHAR_WIDTH(const font_t * f, uint8_t c) {
+  if(f->font_descriptor == NULL)
+    return f->char_width;
+  return (c < f->first_char || c > f->last_char) ? f->char_width : f->font_descriptor[c-f->first_char].cw;
+}
 
 #define delay_us(us)  delayMicroseconds(us)
 #define delay_ms(ms)  delay(ms)
@@ -170,13 +171,13 @@ void ssd1306_class::send_command_d2(uint8_t c, uint8_t d1, uint8_t d2) {
 
 void ssd1306_class::send_data(uint8_t dat, uint16_t len) { 
   uint8_t x;
-  if(len > SSD1306_LCDWIDTH)
-    len = SSD1306_LCDWIDTH;
+  if(len > OLED_LCDWIDTH)
+    len = OLED_LCDWIDTH;
   if(_wire != NULL) {
     _wire->beginTransmission(SSD1306_I2C_ADDRESS);
     _wire->write(0X40); // data not command
     #if I2C_BUFFER_LENGTH < 136 // Default ESP32 size is 128
-      for(x=0; x < SSD1306_LCDWIDTH/2 && x < len; x++)  // Break down in half lines if necessary
+      for(x=0; x < OLED_LCDWIDTH/2 && x < len; x++)  // Break down in half lines if necessary
         _wire->write(dat);
       _wire->endTransmission();
       if(x < len) { // Still bytes to go?
@@ -211,13 +212,13 @@ void ssd1306_class::send_data(uint8_t dat, uint16_t len) {
 
 void ssd1306_class::send_data(const uint8_t * dat, uint16_t len) {
   uint8_t x;
-  if(len > SSD1306_LCDWIDTH)
-    len = SSD1306_LCDWIDTH;
+  if(len > OLED_LCDWIDTH)
+    len = OLED_LCDWIDTH;
   if(_wire != NULL) {
     _wire->beginTransmission(SSD1306_I2C_ADDRESS);
     _wire->write(0X40); // data not command
     #if I2C_BUFFER_LENGTH < 136 // Default ESP32 size is 128
-      for(x=0; x < SSD1306_LCDWIDTH/2 && x < len; x++)  // Break down in half lines if necessary
+      for(x=0; x < OLED_LCDWIDTH/2 && x < len; x++)  // Break down in half lines if necessary
         _wire->write(*dat++);
       _wire->endTransmission();
       if(x < len) { // Still bytes to go?
@@ -254,12 +255,14 @@ void ssd1306_class::send_data(const uint8_t * dat, uint16_t len) {
 ///////////////////////////////////////////////////////////////////
 // 
 
-#define SSD1306_SETXY(x,y) \
-  _x = x;           \
-  _y = y;       
+void ssd1306_class::gotox(uint16_t x, bool in_pixels) {
+  const font_t & fnt= ssd1306_fonts[_font_id];
+  _px = in_pixels ? x : x * (fnt.char_width + fnt.whitespace);
+  if(_px >= OLED_LCDWIDTH - fnt.char_width) _px = OLED_LCDWIDTH - fnt.char_width;
+}
 
-void ssd1306_class::gotoxy(uint8_t x, uint8_t y) {
-  SSD1306_SETXY(x,y)
+void ssd1306_class::gotoy(uint16_t y, bool in_lines) {
+  _y = in_lines ? y / 8 : y;
 }
 
 ///////////////////////////////////////////////////////////
@@ -270,25 +273,24 @@ void ssd1306_class::gotoxy(uint8_t x, uint8_t y) {
 // C:\Users\[user]\AppData\Local\Arduino15\packages\esp32\hardware\esp32\2.0.2\libraries\Wire\src
 void ssd1306_class::hardware_clearscreen() { 
   #if !SH1106_CONTROLLER
-    send_command_d2(SSD1306_COLUMNADDR, 0, SSD1306_LCDWIDTH-1);
+    send_command_d2(SSD1306_COLUMNADDR, 0, OLED_LCDWIDTH-1);
   #endif
-  for (int y=0; y<SSD1306_LCDROWS; y++) {
+  for (int y=0; y < OLED_LCDROWS; y++) {
     send_command(SSD1306_SH1106_SETPAGEADDRESS(y));
     send_command(SSD1306_SH1106_SET_COL_LOW(_start_column)); // A3-A0
     send_command(SSD1306_SH1106_SET_COL_HIGH(0));            // A7-A4
-    send_data((uint8_t)0,SSD1306_LCDWIDTH);
+    send_data((uint8_t)0,OLED_LCDWIDTH);
   }
 }
 ///////////////////////////////////////////////////////////
 // Clears the whole screen of the SSD1306
 void ssd1306_class::clearscreen() {
-  _x        = 0;
-  _y        = 0;
-  _x_offset = 0;
+  _px = 0;
+  _y  = 0;
   #if !OLED_USE_BUFFER
-    _y_skip   = 0;
+    _y_skip = 0;
   #endif
-  clearlines(0, SSD1306_LCDROWS);
+  clearlines(0, OLED_LCDROWS);
 }
 
 ///////////////////////////////////////////////////////////////////
@@ -298,7 +300,7 @@ void ssd1306_class::progress_bar(uint8_t x, uint8_t y, uint8_t val, uint8_t max,
   uint8_t bar[max+2];
   uint8_t rows = double_row ? 2 : 1;
   #if !OLED_USE_BUFFER && !SH1106_CONTROLLER
-    send_command_d2(SSD1306_COLUMNADDR, 0, SSD1306_LCDWIDTH-1);nn
+    send_command_d2(SSD1306_COLUMNADDR, 0, OLED_LCDWIDTH-1);
   #endif
   for(uint8_t r = 0; r < rows; r++) {
     if(double_row) {
@@ -315,10 +317,10 @@ void ssd1306_class::progress_bar(uint8_t x, uint8_t y, uint8_t val, uint8_t max,
       bar[max+1] = 0x7F;
     }
     #if OLED_USE_BUFFER
-      int col = x + _x_offset;
+      int col = x;
       setmem(col, y+r, bar, max+2);
     #else
-      int col = x + _x_offset + _start_column;
+      int col = x + _start_column;
       send_command(SSD1306_SH1106_SETPAGEADDRESS(y+r));
       send_command(SSD1306_SH1106_SET_COL_LOW(col & 15));   // A3-A0
       send_command(SSD1306_SH1106_SET_COL_HIGH(col >> 4));  // A7-A4
@@ -327,34 +329,56 @@ void ssd1306_class::progress_bar(uint8_t x, uint8_t y, uint8_t val, uint8_t max,
   }
 }
 
-ssd1306_class::ssd1306_class(TwoWire * wire, SPIClass * spi, SoftSPI * softspi, uint8_t cs, uint8_t dc, uint8_t rows, uint8_t tickers) {
+#if OLED_USE_BUFFER
+ssd1306_class::ssd1306_class(uint8_t rows, uint8_t tickers) {
   memset(this, 0, sizeof(ssd1306_class));
-  _wire       = wire;
-  _spi        = spi;
-  _softspi    = softspi != NULL;
-  _cs         = cs;
-  _dc         = dc;
-  _device     = OLED_UNKNOWN;
-  _font       = SSD1306_FONT_8X8;
-  if(_softspi) {
-    _softsck  = softspi->_sck;
-    _softmosi = softspi->_mosi;
-  }
-
-  #if OLED_USE_BUFFER
-    _nr_rows    = rows;
-    _nr_tickers = tickers;
-    if(_nr_rows > 0 && _nr_tickers > 0) {
-      _lines   = (line_t   *)malloc(rows    * sizeof(line_t));
-      _tickers = (ticker_t *)malloc(tickers * sizeof(ticker_t));
-      memset(_lines, 0, rows * sizeof(line_t));
-      memset(_tickers, 0, tickers * sizeof(ticker_t));
-      for(int i = 0; i < _nr_rows && i < SSD1306_LCDROWS; i++) {
-        _lines[i].row    = i; 
-        _lines[i].active = 1;
-      }
+  _device  = OLED_UNKNOWN;
+  _font_id = SSD1306_FONT_8X8;
+  _nr_rows    = rows;
+  _nr_tickers = tickers;
+  if(_nr_rows > 0) {
+    _lines   = (line_t *)malloc(rows * sizeof(line_t));
+    memset(_lines, 0, rows * sizeof(line_t));
+    for(int i = 0; i < _nr_rows && i < OLED_LCDROWS; i++) {
+      _lines[i].row    = i; 
+      _lines[i].active = 1;
     }
-  #endif
+  }
+  if(_nr_tickers > 0) {
+    _tickers = (ticker_t *)malloc(tickers * sizeof(ticker_t));
+    memset(_tickers, 0, tickers * sizeof(ticker_t));
+  }
+}
+#else
+ssd1306_class::ssd1306_class() {
+  memset(this, 0, sizeof(ssd1306_class));
+  _device  = OLED_UNKNOWN;
+  _font_id = SSD1306_FONT_8X8;
+}
+#endif
+
+void ssd1306_class::setport(TwoWire & wire) {
+  _wire     = &wire;
+  _spi      = NULL;
+  _softspi  = false;
+}
+
+void ssd1306_class::setport(SPIClass & spi, uint8_t cs, uint8_t dc) {
+  _wire     = NULL;
+  _spi      = &spi;
+  _softspi  = false;
+  _cs       = cs;
+  _dc       = dc;
+}
+
+void ssd1306_class::setport(SoftSPI & softspi, uint8_t cs, uint8_t dc) {
+  _wire     = NULL;
+  _spi      = NULL;
+  _softspi  = true;
+  _cs       = cs;
+  _dc       = dc;
+  _softsck  = softspi._sck;
+  _softmosi = softspi._mosi;
 }
 
 ssd1306_class::~ssd1306_class() {
@@ -369,7 +393,7 @@ ssd1306_class::~ssd1306_class() {
 
 void ssd1306_class::suspend() {  
   if(_spi != NULL) {
-    _spi->endTransaction(); // For some reason Wifi will not cannecot with open SPI port
+    _spi->endTransaction(); // For some reason Wifi will not connect with open SPI port
   }
 }
 
@@ -463,14 +487,60 @@ uint8_t ssd1306_class::initialize(uint8_t flags, uint32_t speed) {
   return _device;
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+uint16_t ssd1306_class::getValidStringLength(const char *str, font_id_t font_id) {
+  uint16_t maxlen = 0;
+  uint16_t cn = 0;
+  if(font_id == SSD1306_FONT_UNCHANGED) font_id = _font_id;
+  const font_t * font= &ssd1306_fonts[font_id];
+  char c = *str++;
+  while(c) {
+    if(c >= font->first_char && c <= font->last_char && font->font_descriptor != NULL)
+      cn += font->font_descriptor[c - font->first_char].cw;
+    else
+      cn += font->char_width;
+    if(cn > OLED_LCDWIDTH) return maxlen;
+    maxlen++;
+    cn += font->whitespace;
+    c = *str++;
+  }
+  return maxlen;
+}
+
+uint16_t ssd1306_class::getStringWidth(const char *str, font_id_t font_id) {
+  uint16_t cn = 0;
+  if(font_id == SSD1306_FONT_UNCHANGED) font_id = _font_id;
+  const font_t * font= &ssd1306_fonts[font_id];
+  char c = *str++;
+  while(c) {
+    if(c >= font->first_char && c <= font->last_char && font->font_descriptor != NULL)
+      cn += font->font_descriptor[c - font->first_char].cw;
+    else
+      cn += font->char_width;
+    cn += font->whitespace;
+    c = *str++;
+  }
+  if(cn > 0) cn -= font->whitespace; // strip whitespace of last char
+  return cn;
+}
+
+uint16_t ssd1306_class::puts_right_aligned(const char * s, font_id_t font) {
+  uint16_t x, w;
+  if(font == SSD1306_FONT_UNCHANGED) font = _font_id;
+  w = getStringWidth(s, font);
+  if(w > OLED_LCDWIDTH) w = OLED_LCDWIDTH;
+  _px = OLED_LCDWIDTH - w;
+   puts(s, font);
+   return _px;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #if OLED_USE_BUFFER
 
 void ssd1306_class::Print(void) {
-  Serial.printf("OLED: width=%d, height=%d, text lines=%d, mem size=%d\n", SSD1306_LCDWIDTH,SSD1306_LCDHEIGHT,SSD1306_LCDROWS,SSD1306_LCDMEMSIZE);
+  Serial.printf("OLED: width=%d, height=%d, text lines=%d, mem size=%d\n", OLED_LCDWIDTH,OLED_LCDHEIGHT,OLED_LCDROWS,SSD1306_LCDMEMSIZE);
   Serial.printf("      buffer lines=%d, buffer memory=%d\n", _nr_rows, _nr_rows * sizeof(line_t));
   Serial.printf("      tickers=%d, ticker memory=%d\n", _nr_tickers, _nr_tickers * sizeof(ticker_t));
 
@@ -484,45 +554,45 @@ void ssd1306_class::Print(void) {
                    _tickers[i].scroll_delay, _tickers[i].delay_counter, _tickers[i].len, _tickers[i].idx);
 }
 
-void ssd1306_class::putch(uint8_t c, font_id font) {
+void ssd1306_class::putch(uint8_t c, font_id_t font) {
   if(font == -1)
-    font = _font;
-  const SSD1306_Font_t *f = &SSD1306_Fonts[font];
-  int col, w, y, i, j;
+    font = _font_id;
+  const font_t *f = &ssd1306_fonts[font];
+  int col, w, cw, y, i, j;
   unsigned char * p;
   if(_y < _nr_rows) {
-    w   = f->u8FontWidth;
-    y   = _y * f->u8DataRows;
-    col = _x_offset ? _x_offset : _x * w;
-    if(col + w > SSD1306_LCDWIDTH)
-      w = f->u8DataCols; // supress blank pixels after last character of line
-    if(c < f->u8FirstChar || c > f->u8LastChar) {
-      for(i = 0; i < f->u8DataRows; i++) {
+    y  = _y * f->char_height;
+    cw = GET_FONT_CHAR_WIDTH(f, c);
+    w  = cw + f->whitespace;
+    col = _px;
+    if(col + w > OLED_LCDWIDTH) 
+      w = cw; // supress blank pixels after last character of line
+    if(col + w > OLED_LCDWIDTH) return; // Still doesn't fit
+
+    if(c < f->first_char || c > f->last_char) { // Character not in font data: write blank space
+      for(i = 0; i < f->char_height; i++) {
         _lines[y+i].update = 1;
         p = _lines[y+i].row_data;
         for(j = 0; j < w; j++)
           p[col+j] = 0;
       }
     }
-    else {
+    else { // Character in font data: write it
       const unsigned char * fd = GET_FONT_DATA(f,c);
-      for(i = 0; i < f->u8DataRows; i++) {
+      for(i = 0; i < f->char_height; i++) {
         _lines[y+i].update = 1;
         p = _lines[y+i].row_data;
-        for(j = 0; j < f->u8DataCols; j++)
-          p[col+j] = fd[i * f->u8DataCols + j];
+        for(j = 0; j < cw; j++)
+          p[col+j] = fd[i * f->char_width + j];
         for(; j < w; j++)
           p[col+j] = 0;
       }
     }
-    if(_x_offset)
-      _x_offset += w;
-    else
-      _x++; // advance cursor
+    _px += w;
   }
 }
 
-void ssd1306_class::puts(const char *s, uint8_t n, font_id font) {
+void ssd1306_class::puts(const char *s, uint8_t n, font_id_t font) {
   stop_ticker(_y); // If a ticker is running on current line, stop it
   while(n && *s) { putch(*s++, font); n--; }
   while(n--)     { putch(' ', font); }
@@ -555,39 +625,38 @@ void ssd1306_class::update_ticker(uint8_t id) {
     }
     else {
       if(++TY.idx < TY.len) {
-        memcpy(_lines[TY.row_id].row_data, &TY.data[TY.idx], SSD1306_LCDWIDTH); 
+        memcpy(_lines[TY.row_id].row_data, &TY.data[TY.idx], OLED_LCDWIDTH); 
         _lines[TY.row_id].update = 1;
       }
       else {
         TY.delay_counter = TY.scroll_delay;
         TY.idx = 0;
-        memcpy(_lines[TY.row_id].row_data, TY.data, SSD1306_LCDWIDTH); 
+        memcpy(_lines[TY.row_id].row_data, TY.data, OLED_LCDWIDTH); 
         _lines[TY.row_id].update = 1;
       }
     }
   }
 }
 
-void ssd1306_class::start_ticker(uint8_t id, uint8_t row_id, const char *s, font_id font, uint16_t speed, uint16_t scrolldelay) {
-  const SSD1306_Font_t *f = &SSD1306_Fonts[font];
-  int linelen = f->u8LineLength;
+void ssd1306_class::start_ticker(uint8_t id, uint8_t row_id, const char *s, font_id_t font, uint16_t speed, uint16_t scrolldelay) {
+  const font_t *f = &ssd1306_fonts[font];
+  int linelen = f->line_length;
   int len = strlen(s);
-  int16_t datalen;
-  int8_t  w;
-  Serial.printf("Start ticker: font: %d, char/line: %d, strlen: %d\n", font, linelen, len);
+  int16_t datalen = getStringWidth(s, font);
+  int8_t cw;
+  Serial.printf("Start ticker: font: %d, char/line: %d, strlen: %d, datalen: %d\n", font, linelen, len, datalen);
   if(id >= _nr_tickers) {
     Serial.printf("Cannot create ticker id %d for row %d\n", id, row_id);
     return; // out of bounds
   }
   stop_ticker(id, false); // stop possible previous ticker
-  if(len <= linelen) {
+  if(datalen <= OLED_LCDWIDTH) {
     Serial.printf("No need to create ticker for: '%s'\n", s);
     setline(row_id, 0);
     puts(0, row_id, s, font); // show the line
   }
   else {
-    w = f->u8FontWidth;
-    datalen = len * w + 2 * SSD1306_LCDWIDTH; // reserve extra for nice flow
+    datalen += 2 * OLED_LCDWIDTH; // reserve extra for nice flow
     Serial.printf("Alloc new text buffer: %d bytes\n", datalen + 1);
     TY.timestamp_prev  = _timestamp;
     TY.timestamp_speed = speed;
@@ -596,16 +665,19 @@ void ssd1306_class::start_ticker(uint8_t id, uint8_t row_id, const char *s, font
     TY.scroll_delay  = scrolldelay;
     TY.delay_counter = scrolldelay;
     TY.idx = 0;
-    TY.len = datalen - SSD1306_LCDWIDTH; // Including a full blank line
+    TY.len = datalen - OLED_LCDWIDTH; // Including a full blank line
     uint8_t * mem = TY.data;
     for(int i = 0; i < len; i++) { // fill the data with graphic text
-      if(s[i] >= f->u8FirstChar && s[i] <= f->u8LastChar)
-        memcpy(mem, GET_FONT_DATA(f,s[i]), f->u8DataCols); 
-      mem += w;
+      cw = GET_FONT_CHAR_WIDTH(f, s[i]);
+      if(s[i] >= f->first_char && s[i] <= f->last_char)
+        memcpy(mem, GET_FONT_DATA(f,s[i]), cw);
+      else 
+        memset(mem, 0, cw);
+      mem += cw + f->whitespace;
     }
     TY.row_id = row_id;
-    memcpy(&TY.data[TY.len], TY.data, SSD1306_LCDWIDTH);
-    memcpy(_lines[TY.row_id].row_data, TY.data, SSD1306_LCDWIDTH); // copy start of data to screen
+    memcpy(&TY.data[TY.len], TY.data, OLED_LCDWIDTH);
+    memcpy(_lines[TY.row_id].row_data, TY.data, OLED_LCDWIDTH); // copy start of data to screen
     _lines[TY.row_id].update = 1;
   }
 }
@@ -640,14 +712,14 @@ void ssd1306_class::shift_row_down(uint8_t y, uint8_t shift) {
   if(shift == 0 || shift > 7) return; // illegal shift
   //Serial.printf("********************* ssd1306_class: shift_row_down = %d with %d\n", y, shift);
   if(shift == 1) {
-    for(int i = 0; i < SSD1306_LCDWIDTH; i++) { 
+    for(int i = 0; i < OLED_LCDWIDTH; i++) { 
       _lines[y].row_data[i] <<= 1;
       _lines[y].update = 1;
     }
   }
   else {
     if(y < _nr_rows - 1) { // Cannot shift last row
-      for(int i = 0; i < SSD1306_LCDWIDTH; i++) {
+      for(int i = 0; i < OLED_LCDWIDTH; i++) {
         _lines[y + 1].row_data[i] = _lines[y].row_data[i] >> (8 - shift);
         _lines[y]    .row_data[i] <<= shift;
       }
@@ -673,10 +745,10 @@ uint8_t ssd1306_class::loop(bool tick) {
       case 4: send_command(SSD1306_SH1106_SETPAGEADDRESS(_lines[_rowcount].row));
               _state--;
               break;
-      case 3: send_data(_lines[_rowcount].row_data,SSD1306_LCDWIDTH/2); // first half of line
+      case 3: send_data(_lines[_rowcount].row_data,OLED_LCDWIDTH/2); // first half of line
               _state--;
               break;   
-      case 2: send_data(&_lines[_rowcount].row_data[SSD1306_LCDWIDTH/2],SSD1306_LCDWIDTH/2); // second half of line
+      case 2: send_data(&_lines[_rowcount].row_data[OLED_LCDWIDTH/2],OLED_LCDWIDTH/2); // second half of line
               _state--;
               break;
       case 1: _state--;
@@ -702,7 +774,7 @@ uint8_t ssd1306_class::loop(bool tick) {
       send_command(SH1106_CMD_COL_LOW + _start_column); // A3-A0
       send_command(SH1106_CMD_COL_HIGH);                // A7-A4
       send_command(SSD1306_SH1106_SETPAGEADDRESS(_lines[_rowcount].row));
-      send_data(_lines[_rowcount].row_data,SSD1306_LCDWIDTH); 
+      send_data(_lines[_rowcount].row_data,OLED_LCDWIDTH); 
     }
   }
   return 0;
@@ -726,9 +798,9 @@ void ssd1306_class::setmem(uint8_t x, uint8_t y, const uint8_t *v, uint8_t n) {
 
 #else
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////
 // Clears lines of the SSD1306ssd1306_command
@@ -738,67 +810,93 @@ void ssd1306_class::setmem(uint8_t x, uint8_t y, const uint8_t *v, uint8_t n) {
 // C:\Users\[user]\AppData\Local\Arduino15\packages\esp32\hardware\esp32\2.0.2\libraries\Wire\src
 void ssd1306_class::clearlines(uint8_t y, uint8_t n) { 
   #if !SH1106_CONTROLLER
-    send_command_d2(SSD1306_COLUMNADDR, 0, SSD1306_LCDWIDTH-1);
+    send_command_d2(SSD1306_COLUMNADDR, 0, OLED_LCDWIDTH-1);
   #endif
   for (int yy=0; yy<n; yy++) {
     send_command(SSD1306_SH1106_SETPAGEADDRESS(y+yy));
     send_command(SSD1306_SH1106_SET_COL_LOW(_start_column)); // A3-A0
     send_command(SSD1306_SH1106_SET_COL_HIGH(0));            // A7-A4
-    send_data((uint8_t)0,SSD1306_LCDWIDTH);
+    send_data((uint8_t)0,OLED_LCDWIDTH);
   }
 }
 
 #if SH1106_CONTROLLER
-void ssd1306_class::putch(unsigned char c, font_id font) {
-  if(font != SSD1306_FONT_UNCHANGED)
-    _font = font;
-  if(_x >= FONT_LINE_LENGTH) return;
-  int col = _x * FONT_WIDTH + _x_offset + _start_column;
-  int row = _y * FONT_DATA_ROWS;
-  for(uint8_t r = 0; r < FONT_DATA_ROWS; r++) {
-    send_command(SSD1306_SH1106_SETPAGEADDRESS(row+r));
-    send_command(SSD1306_SH1106_SET_COL_LOW(col & 15));   // A3-A0
-    send_command(SSD1306_SH1106_SET_COL_HIGH(col >> 4));  // A7-A4
-    if(c < FONT_FIRST_CHAR || c > FONT_LAST_CHAR) {
-      send_data((uint8_t)0, FONT_WIDTH);
+void ssd1306_class::putch(uint8_t c, font_id_t font) {
+  if(font == -1)
+    font = _font_id;
+  const font_t *f = &ssd1306_fonts[font];
+  int col, w, cw, y, i, j;
+  unsigned char * p;
+  
+  if(_y < OLED_LCDROWS) {
+    y  = _y * f->char_height;
+    cw = GET_FONT_CHAR_WIDTH(f, c);
+    w  = cw + f->whitespace;
+    col = _px;
+    if(col + w > OLED_LCDWIDTH) 
+      w = cw; // supress blank pixels after last character of line
+    if(col + w > OLED_LCDWIDTH) return; // Still doesn't fit
+
+    if(c < f->first_char || c > f->last_char) { // Character not in font data: write blank space
+      for(uint8_t r = 0; r < f->char_height; r++) {
+        send_command(SSD1306_SH1106_SETPAGEADDRESS(y+r));
+        send_command(SSD1306_SH1106_SET_COL_LOW(col & 15));   // A3-A0
+        send_command(SSD1306_SH1106_SET_COL_HIGH(col >> 4));  // A7-A4
+        send_data((uint8_t)0, w);
+      }
     }
-    else {
-      const uint8_t * p = &FONT_DATA[(c - FONT_FIRST_CHAR) * FONT_CHAR_SIZE + r * FONT_DATA_COLS];
-      send_data(p, FONT_DATA_COLS);
-      if(FONT_DATA_COLS < FONT_WIDTH && _x < FONT_LINE_LENGTH - 1)
-        send_data((uint8_t)0, FONT_WIDTH - FONT_DATA_COLS);
+    else { // Character in font data: write it
+      const unsigned char * fd = GET_FONT_DATA(f,c);
+      for(uint8_t r = 0; r < f->char_height; r++) {
+        send_command(SSD1306_SH1106_SETPAGEADDRESS(y+r));
+        send_command(SSD1306_SH1106_SET_COL_LOW(col & 15));   // A3-A0
+        send_command(SSD1306_SH1106_SET_COL_HIGH(col >> 4));  // A7-A4
+        send_data(&fd[r * f->char_width], cw); 
+        if(w > cw)
+          send_data((uint8_t)0, w - cw);
+      }
     }
+    _px += w;
   }
-  _x++; // advance cursor
 }
+
 #else
 
-void ssd1306_class::putch(unsigned char c, font_id font) {
-  if(font != SSD1306_FONT_UNCHANGED)
-    _font = font;
-  if(_x >= FONT_LINE_LENGTH) return;
-  int col = _x * FONT_WIDTH + _x_offset + _start_column;
-  int row = _y * FONT_DATA_ROWS;
-  if(!_y_skip) 
-    send_command_d2(SSD1306_PAGEADDR, row, row + FONT_DATA_LAST_ROW);
-  if(c < FONT_FIRST_CHAR || c > FONT_LAST_CHAR) {
-    send_command_d2(SSD1306_COLUMNADDR, col, col + FONT_WIDTH - 1);
-    send_data((uint8_t)0x0, FONT_WIDTH * FONT_DATA_ROWS);
-  }
-  else {
-    send_command_d2(SSD1306_COLUMNADDR, col, col + FONT_DATA_LAST_COL);
-    const uint8_t * p = &FONT_DATA[(c - FONT_FIRST_CHAR) * FONT_CHAR_SIZE];
-    send_data(p, FONT_CHAR_SIZE);
-    if(FONT_DATA_COLS < FONT_WIDTH && _x < FONT_LINE_LENGTH - 1) {
-      send_command_d2(SSD1306_COLUMNADDR, col + FONT_DATA_COLS, col + FONT_WIDTH - 1);
-      send_data((uint8_t)0x0, (FONT_WIDTH - FONT_DATA_COLS) * FONT_DATA_ROWS);
+void ssd1306_class::putch(unsigned char c, font_id_t font) {
+  if(font == -1)
+    font = _font_id;
+  const font_t *f = &ssd1306_fonts[font];
+  int col, w, cw, y, i, j;
+  unsigned char * p;
+  
+  if(_y < OLED_LCDROWS) {
+    y  = _y * f->char_height;
+    cw = GET_FONT_CHAR_WIDTH(f, c);
+    w  = cw + f->whitespace;
+    col = _px;
+    if(col + w > OLED_LCDWIDTH) 
+      w = cw; // supress blank pixels after last character of line
+    if(col + w > OLED_LCDWIDTH) return; // Still doesn't fit
+    if(!_y_skip) 
+      send_command_d2(SSD1306_PAGEADDR, y, y + f->char_height - 1);
+    send_command_d2(SSD1306_COLUMNADDR, col, col + w - 1);
+    if(c < f->first_char || c > f->last_char) { // Character not in font data: write blank space
+      send_data((uint8_t)0, w * f->char_height);
     }
+    else { // Character in font data: write it
+      const unsigned char * fd = GET_FONT_DATA(f,c);
+      for(uint8_t r = 0; r < f->char_height; r++) {
+        send_data(&fd[r * f->char_width], cw); 
+        if(w > cw)
+          send_data((uint8_t)0, w - cw);
+      }
+    }
+    _px += w;
   }
-  _x++; // advance cursor
 }
 #endif
 
-void ssd1306_class::puts(const char *s, uint8_t n, font_id font) {
+void ssd1306_class::puts(const char *s, uint8_t n, font_id_t font) {
   while(n && *s) { putch(*s++,font); _y_skip = 1; n--; }
   while(n--)     { putch(' ',font);  _y_skip = 1;      }
   _y_skip = 0;

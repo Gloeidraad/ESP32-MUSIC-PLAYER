@@ -39,7 +39,8 @@
 
 class SimpleWaveGeneratorClass {
   public:
-    SimpleWaveGeneratorClass();
+    SimpleWaveGeneratorClass(bool use_lsbj = false) : SimpleWaveGeneratorClass(-1, -1, -1, use_lsbj) {}
+    SimpleWaveGeneratorClass(uint8_t pin_bck, uint8_t pin_ws, uint8_t pin_dout, bool use_lsbj = false);
     ~SimpleWaveGeneratorClass();
     void Init(i2s_port_t port = i2s_port_t(I2S_NUM_0));
     void Start(int waveform, bool autoplay = false);
@@ -51,10 +52,10 @@ class SimpleWaveGeneratorClass {
       const char *GetWaveformName(int id);
       const char *GetWaveformName() {return GetWaveformName(_current_wave_form); }
     #endif
-    typedef struct { int16_t left, right; } samples_t;
     void Print(bool hex = false); // for debug purposes
     
   protected:
+    typedef struct { int16_t left, right; } samples_t;
     void CreateSineWave(samples_t * dest, int samples);
     void CreateTriangleWave(samples_t * dest, int samples);
     void CreateDacTestWave(samples_t * dest, int samples);
@@ -69,6 +70,11 @@ class SimpleWaveGeneratorClass {
     int  _current_number_of_samples;
     bool _pause;
     bool _i2s_installed;
+    uint8_t _pin_bck;
+    uint8_t _pin_ws;
+    uint8_t _pin_dout;
+    bool _use_lsbj;
+    uint16_t _dac_adjust;
     samples_t * _samples;
     #if ESP_IDF_VERSION_MAJOR == 5
       i2s_chan_handle_t _i2s_tx_handle;
