@@ -19045,7 +19045,7 @@
 		(descr "SW_TH_Tactile_Omron_B3F-10xx_https://www.omron.com/ecb/products/pdf/en-b3f.pdf")
 		(tags "Omron B3F-10xx")
 		(property "Reference" "SW5"
-			(at 4.8 0.3 0)
+			(at 0 -4.3 0)
 			(layer "B.SilkS")
 			(uuid "24faff86-dda8-4ded-b582-ec492bff100e")
 			(effects
