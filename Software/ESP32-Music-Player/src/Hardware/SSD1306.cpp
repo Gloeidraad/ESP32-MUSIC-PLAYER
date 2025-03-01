@@ -568,7 +568,6 @@ void ssd1306_class::putch(uint8_t c, font_id_t font) {
     if(col + w > OLED_LCDWIDTH) 
       w = cw; // supress blank pixels after last character of line
     if(col + w > OLED_LCDWIDTH) return; // Still doesn't fit
-
     if(c < f->first_char || c > f->last_char) { // Character not in font data: write blank space
       for(i = 0; i < f->char_height; i++) {
         _lines[y+i].update = 1;

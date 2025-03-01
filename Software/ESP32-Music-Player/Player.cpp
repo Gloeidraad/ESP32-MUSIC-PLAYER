@@ -422,6 +422,7 @@ void PlayerClass::Play(void) {
                                  Display.ShowPlayPause(0);
                                  break;
     case SET_SOURCE_WEB_RADIO  : if(Settings.NV.WebRadioTotalStations == 0) break;
+                                 Settings.WebTitleReceived = 0;
                                  if(WiFi.isConnected()) {
                                    web_station_t web_station;
                                    UrlSettings.GetStation(Settings.NV.WebRadioCurrentStation, web_station);
@@ -438,7 +439,6 @@ void PlayerClass::Play(void) {
                                  Display.ShowPlayPause(Settings.Play);
                                  Display.ShowVolume(); // Show station name on volume line
                                  Serial.println("**********new radio started************");
-                                 Settings.WebTitleReceived = 0;
                                  break;
     case SET_SOURCE_WAVE_GEN   : _waveform_player->Volume(Settings.GetLogVolume(WAVEFORM_VOLUME_MAX)); 
                                  _waveform_player->Start(Settings.NV.WaveformId);

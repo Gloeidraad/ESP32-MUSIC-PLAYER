@@ -353,10 +353,12 @@ void DisplayClass::ShowVolume(uint8_t vol, uint8_t max) {
   OLED.gotoy(STATUS_LINE2);
   if(Settings.NV.SourceAF == SET_SOURCE_WEB_RADIO && Settings.NV.WebRadioTotalStations > 0) {
     web_station_t web_station;
+    uint16_t name_width;
     UrlSettings.GetStation(Settings.NV.WebRadioCurrentStation, web_station);
     OLED.puts(0, STATUS_LINE2, web_station.name, FONT_SMALL_DEFAULT);
-    if(OLED.getStringWidth(web_station.name, FONT_SMALL_DEFAULT) > TEXT_VOLUME_X - 5) {
-      volume_text = "Vol";
+    name_width = OLED.getStringWidth(web_station.name, FONT_SMALL_DEFAULT);
+    if(name_width > TEXT_VOLUME_X - 5) {
+      volume_text = name_width > TEXT_VOLUME_X ? "" : "Vol";
       volume_px   = TEXT_VOL_X;
     }
   }
