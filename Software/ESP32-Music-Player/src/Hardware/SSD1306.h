@@ -76,8 +76,8 @@ class ssd1306_class {
     void putch(uint8_t c, font_id_t font = SSD1306_FONT_UNCHANGED);
     void puts(const char *s, uint8_t n, font_id_t font = SSD1306_FONT_UNCHANGED);
     void putch(uint8_t x, uint8_t y, unsigned char c, font_id_t font = SSD1306_FONT_UNCHANGED)         { setfont(font); gotoxy(x,y); putch(c,font); }
-    void puts(uint8_t x, uint8_t y, const char *s, font_id_t font = SSD1306_FONT_UNCHANGED)            { puts(x,y,s,strlen(s),font);    }
-    void puts(const char *s, font_id_t font = SSD1306_FONT_UNCHANGED)                                  { puts(s,strlen(s),font);        }
+    void puts(uint8_t x, uint8_t y, const char *s, font_id_t font = SSD1306_FONT_UNCHANGED)            { puts(x,y,s,StrLen(s),font);    }
+    void puts(const char *s, font_id_t font = SSD1306_FONT_UNCHANGED)                                  { puts(s,StrLen(s),font);        }
     void puts(uint8_t x, uint8_t y, const char *s, uint8_t n, font_id_t font = SSD1306_FONT_UNCHANGED) { setfont(font); gotoxy(x,y); puts(s,n,font);  }
     uint16_t puts_right_aligned(const char * s, font_id_t font = SSD1306_FONT_UNCHANGED);
     uint16_t puts_right_aligned(uint8_t y, const char * s, font_id_t font = SSD1306_FONT_UNCHANGED)    { gotoy(y); return puts_right_aligned(s, font); }
@@ -120,6 +120,7 @@ class ssd1306_class {
 
   private:
     void hardware_clearscreen();
+    uint16_t StrLen(const char *s);
     void clearlines(uint8_t y, uint8_t n);
     void send_command(uint8_t c);
     void send_command_d1(uint8_t c, uint8_t d1);

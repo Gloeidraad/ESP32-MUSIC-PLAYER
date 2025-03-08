@@ -246,7 +246,7 @@ void SettingsClass::EepromLoad(void) {
   #else
     NV.Volume         = Validate(NV.Volume,      SET_VOLUME_MIN,       NV.VolumeSteps,      NV.VolumeSteps);
   #endif
-  NV.OutputFormat    &= 1;
+  NV.OutputFormat     = Validate(NV.OutputFormat, 0, 1, 0);;
   NV.DiskTotalTracks  = Validate(NV.DiskTotalTracks, 0, SET_SD_TRACKS_MAX + 1, 0); 
   NV.DiskCurrentTrack = Validate(NV.DiskCurrentTrack, 1, NV.DiskTotalTracks, 1);
   NV.CurrentSsid      = Validate(NV.CurrentSsid, 0, SET_SSID_MAX, 0);

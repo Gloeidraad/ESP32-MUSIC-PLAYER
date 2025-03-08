@@ -16,7 +16,7 @@
 // EEPROM specification
 //=======================================================
 
-#define BT_DEVICE_NAME   "ESP32 AM/FM Transmitter"
+#define BT_DEVICE_NAME   "ESP32 Music Player"
 
 #define EEPROM_TYPE      64 // 24Cxx where xx is EEPROM_SIZE
 #define EEPROM_PAGE_SIZE 32 // in bytes, check datasheet for value

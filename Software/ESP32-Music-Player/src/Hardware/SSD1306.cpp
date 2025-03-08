@@ -110,9 +110,9 @@ inline uint8_t GET_FONT_CHAR_WIDTH(const font_t * f, uint8_t c) {
 #define delay_us(us)  delayMicroseconds(us)
 #define delay_ms(ms)  delay(ms)
 
-//=====================
-//==  Useful Macros  ==
-//=====================
+//=================================
+//==  Useful Macros and fuctions ==
+//=================================
 
 #define USE_ESP32_FAST_IO
 
@@ -133,7 +133,113 @@ inline uint8_t GET_FONT_CHAR_WIDTH(const font_t * f, uint8_t c) {
     PIN_CLR(sck); if((c) & 0x04) PIN_SET(mosi); else PIN_CLR(mosi); PIN_SET(sck); \
     PIN_CLR(sck); if((c) & 0x02) PIN_SET(mosi); else PIN_CLR(mosi); PIN_SET(sck); \
     PIN_CLR(sck); if((c) & 0x01) PIN_SET(mosi); else PIN_CLR(mosi); PIN_SET(sck)
- 
+
+// Some fonts have a limited "code page 437" extended character set. However, track titles 
+// and web radio information use often UTF-8 coding. These tables allow for a limited
+// conversion from UTF-8 to CP437. It covers all UTF-8 codes U+00C0 through U+00FF, and
+// some codes in the UTF-8 codes U+00A0 through U+00BF range.
+// For a list of UTF-8 characters, see: https://www.utf8-chartable.de/
+// or: https://www.fileformat.info/info/charset/UTF-8/list.htm
+
+typedef struct { uint16_t utf8; uint8_t cp437; } utf8_lookup_table_t;
+
+// Remark: Characters not in CP 437 are repaced with unaccented base character
+uint8_t utf8_C380_C3BF_table[] =  {
+  0x9F, // À   LATIN CAPITAL LETTER A WITH GRAVE (U+00C0)   c380
+  0x9E, // Á   LATIN CAPITAL LETTER A WITH ACUTE (U+00C1)   c381
+  'A',  // Â   LATIN CAPITAL LETTER A WITH CIRCUMFLEX (U+00C2)   c382
+  'A',  // Ã   LATIN CAPITAL LETTER A WITH TILDE (U+00C3)   c383
+  0x8E, // Ä   LATIN CAPITAL LETTER A WITH DIAERESIS (U+00C4)   c384
+  0x8F, // Å   LATIN CAPITAL LETTER A WITH RING ABOVE (U+00C5)   c385
+  0x92, // Æ   LATIN CAPITAL LETTER AE (U+00C6)   c386
+  0x80, // Ç   LATIN CAPITAL LETTER C WITH CEDILLA (U+00C7)   c387
+  'E',  // È   LATIN CAPITAL LETTER E WITH GRAVE (U+00C8)   c388
+  0x90, // É   LATIN CAPITAL LETTER E WITH ACUTE (U+00C9)   c389
+  'E',  // Ê   LATIN CAPITAL LETTER E WITH CIRCUMFLEX (U+00CA)   c38a
+  'E',  // Ë   LATIN CAPITAL LETTER E WITH DIAERESIS (U+00CB)   c38b
+  'I',  // Ì   LATIN CAPITAL LETTER I WITH GRAVE (U+00CC)   c38c
+  'I',  // Í   LATIN CAPITAL LETTER I WITH ACUTE (U+00CD)   c38d
+  'I',  // Î   LATIN CAPITAL LETTER I WITH CIRCUMFLEX (U+00CE)   c38e
+  'I',  // Ï   LATIN CAPITAL LETTER I WITH DIAERESIS (U+00CF)   c38f
+  'D',  // Ð   LATIN CAPITAL LETTER ETH (U+00D0)   c390
+  0xA5, // Ñ   LATIN CAPITAL LETTER N WITH TILDE (U+00D1)   c391
+  'O',  // Ò   LATIN CAPITAL LETTER O WITH GRAVE (U+00D2)   c392
+  'O',  // Ó   LATIN CAPITAL LETTER O WITH ACUTE (U+00D3)   c393
+  'O',  // Ô   LATIN CAPITAL LETTER O WITH CIRCUMFLEX (U+00D4)   c394
+  'O',  // Õ   LATIN CAPITAL LETTER O WITH TILDE (U+00D5)   c395
+  0x89, // Ö   LATIN CAPITAL LETTER O WITH DIAERESIS (U+00D6)   c396
+  'x',  // ×   MULTIPLICATION SIGN (U+00D7)   c397
+  0x9D, // Ø   LATIN CAPITAL LETTER O WITH STROKE (U+00D8)   c398
+  'U',  // Ù   LATIN CAPITAL LETTER U WITH GRAVE (U+00D9)   c399
+  'U',  // Ú   LATIN CAPITAL LETTER U WITH ACUTE (U+00DA)   c39a
+  'U',  // Û   LATIN CAPITAL LETTER U WITH CIRCUMFLEX (U+00DB)   c39b
+  0x9A, // Ü   LATIN CAPITAL LETTER U WITH DIAERESIS (U+00DC)   c39c
+  'Y',  // Ý   LATIN CAPITAL LETTER Y WITH ACUTE (U+00DD)   c39d
+  'D',  // Þ   LATIN CAPITAL LETTER THORN (U+00DE)   c39e
+  'B',  // ß   LATIN SMALL LETTER SHARP S (U+00DF)   c39f
+  0x85, // à   LATIN SMALL LETTER A WITH GRAVE (U+00E0)   c3a0
+  0xA0, // á   LATIN SMALL LETTER A WITH ACUTE (U+00E1)   c3a1
+  0x83, // â   LATIN SMALL LETTER A WITH CIRCUMFLEX (U+00E2)   c3a2
+  'a',  // ã   LATIN SMALL LETTER A WITH TILDE (U+00E3)   c3a3
+  0x84, // ä   LATIN SMALL LETTER A WITH DIAERESIS (U+00E4)   c3a4
+  0x86, // å   LATIN SMALL LETTER A WITH RING ABOVE (U+00E5)   c3a5
+  0x91, // æ   LATIN SMALL LETTER AE (U+00E6)   c3a6
+  0x87, // ç   LATIN SMALL LETTER C WITH CEDILLA (U+00E7)   c3a7
+  0x8A, // è   LATIN SMALL LETTER E WITH GRAVE (U+00E8)   c3a8
+  'e',  // é   LATIN SMALL LETTER E WITH ACUTE (U+00E9)   c3a9
+  0x88, // ê   LATIN SMALL LETTER E WITH CIRCUMFLEX (U+00EA)   c3aa
+  0x89, // ë   LATIN SMALL LETTER E WITH DIAERESIS (U+00EB)   c3ab
+  0x8D, // ì   LATIN SMALL LETTER I WITH GRAVE (U+00EC)   c3ac
+  0xA1, // í   LATIN SMALL LETTER I WITH ACUTE (U+00ED)   c3ad
+  0x8C, // î   LATIN SMALL LETTER I WITH CIRCUMFLEX (U+00EE)   c3ae
+  0x8B, // ï   LATIN SMALL LETTER I WITH DIAERESIS (U+00EF)   c3af
+  'd',  // ð   LATIN SMALL LETTER ETH (U+00F0)   c3b0
+  0xA4, // ñ   LATIN SMALL LETTER N WITH TILDE (U+00F1)   c3b1
+  0x95, // ò   LATIN SMALL LETTER O WITH GRAVE (U+00F2)   c3b2
+  0xA2, // ó   LATIN SMALL LETTER O WITH ACUTE (U+00F3)   c3b3
+  0x93, // ô   LATIN SMALL LETTER O WITH CIRCUMFLEX (U+00F4)   c3b4
+  'o',  // õ   LATIN SMALL LETTER O WITH TILDE (U+00F5)   c3b5
+  0x94, // ö   LATIN SMALL LETTER O WITH DIAERESIS (U+00F6)   c3b6
+  ' ',  // ÷   DIVISION SIGN (U+00F7)   c3b7
+  0x9B, // ø   LATIN SMALL LETTER O WITH STROKE (U+00F8)   c3b8
+  0x97, // ù   LATIN SMALL LETTER U WITH GRAVE (U+00F9)   c3b9
+  0xA3, // ú   LATIN SMALL LETTER U WITH ACUTE (U+00FA)   c3ba
+  0x96, // û   LATIN SMALL LETTER U WITH CIRCUMFLEX (U+00FB)   c3bb
+  0x81, // ü   LATIN SMALL LETTER U WITH DIAERESIS (U+00FC)   c3bc
+  'y',  // ý   LATIN SMALL LETTER Y WITH ACUTE (U+00FD)   c3bd
+  'p',  // þ   LATIN SMALL LETTER THORN (U+00FE)   c3be
+  0x98, // ÿ   LATIN SMALL LETTER Y WITH DIAERESIS (U+00FF)   c3bf
+};
+
+utf8_lookup_table_t utf8_C2xx_lookup_table[] =  {
+  //0xC2A2, 0x9B, // ASCII 'cent'
+  0xC2A3, 0x9C, // ASCII 'pound'
+  //0xC2A5, 0x9D, // ASCII 'yen'
+  //0xC2A4, 0x9E, // ASCII 'peseta'
+  //0xC283, 0x9F, // ASCII 'florin'
+  0xC2AA, 0xA6, // ASCII 'a sup' feminine ordinal
+  0xC2BA, 0xA7, // ASCII 'o sup' masculine ordinal
+  0xC2B0, 0xA7, // ASCII 'o sup' or degrae
+  0xC2BF, 0xA8, // ASCII '? rev'
+  0xC2AC, 0xAA, // ASCII 'hook right'
+  0xC2BD, 0xAB, // ASCII '1/2'
+  0xC2BC, 0xAC, // ASCII '1/4'
+  0xC2a1, 0xAD, // ASCII '! rev'
+  0xC2ab, 0xAE, // ASCII '<<'
+  0xC2bb, 0xAF, // ASCII '>>'
+};
+
+static uint8_t UTF8toCP437(uint8_t prefix, uint8_t code) { // simple conversion with lookup tables
+  uint16_t utf8 = ((uint16_t)prefix << 8) + code;
+  if(utf8 >= 0xC380 && utf8 <= 0xC3BF) {
+    return utf8_C380_C3BF_table[utf8 - 0xC380];
+  }
+  for(int i = 0; i < sizeof(utf8_C2xx_lookup_table) / sizeof(utf8_lookup_table_t); i++) {
+    if(utf8_C2xx_lookup_table[i].utf8 == utf8) return utf8_C2xx_lookup_table[i].cp437;
+  }
+  return 0;
+}
+
 /////////////////////////////////////// 
 //
 void ssd1306_class::send_command(uint8_t c) {
@@ -487,6 +593,20 @@ uint8_t ssd1306_class::initialize(uint8_t flags, uint32_t speed) {
   return _device;
 }
 
+uint16_t ssd1306_class::StrLen(const char *str) {
+  uint16_t len = 0;
+  char c = *str++;
+  while(c) {
+    if((c & 0xC0) == 0xC0) { // UTF-8 code
+      c = UTF8toCP437(c, *str);
+      if(c != 0) str++;
+    }
+    len++;
+    c = *str++;
+  }
+  return len;
+}
+
 uint16_t ssd1306_class::getValidStringLength(const char *str, font_id_t font_id) {
   uint16_t maxlen = 0;
   uint16_t cn = 0;
@@ -494,6 +614,10 @@ uint16_t ssd1306_class::getValidStringLength(const char *str, font_id_t font_id)
   const font_t * font= &ssd1306_fonts[font_id];
   char c = *str++;
   while(c) {
+    if((c & 0xC0) == 0xC0) { // UTF-8 code
+      c = UTF8toCP437(c, *str);
+      if(c != 0) str++;
+    }
     if(c >= font->first_char && c <= font->last_char && font->font_descriptor != NULL)
       cn += font->font_descriptor[c - font->first_char].cw;
     else
@@ -512,6 +636,10 @@ uint16_t ssd1306_class::getStringWidth(const char *str, font_id_t font_id) {
   const font_t * font= &ssd1306_fonts[font_id];
   char c = *str++;
   while(c) {
+    if((c & 0xC0) == 0xC0) { // UTF-8 code
+      c = UTF8toCP437(c, *str);
+      if(c != 0) str++;
+    }
     if(c >= font->first_char && c <= font->last_char && font->font_descriptor != NULL)
       cn += font->font_descriptor[c - font->first_char].cw;
     else
@@ -593,8 +721,17 @@ void ssd1306_class::putch(uint8_t c, font_id_t font) {
 
 void ssd1306_class::puts(const char *s, uint8_t n, font_id_t font) {
   stop_ticker(_y); // If a ticker is running on current line, stop it
-  while(n && *s) { putch(*s++, font); n--; }
-  while(n--)     { putch(' ', font); }
+  uint8_t c = *s++;
+  while(n && c) {
+    if((c & 0xC0) == 0xC0) { // UTF-8 code
+      c = UTF8toCP437(c, *s);
+      if(c != 0) s++;
+    }
+    putch(c, font);
+    c = *s++;
+    n--;
+  }
+  while(n--) { putch(' ', font); }
 }
 
 void ssd1306_class::clearlines(uint8_t y, uint8_t n) { for(int i = 0; i < n; i++) setline(y+i, 0); }
@@ -643,7 +780,7 @@ void ssd1306_class::start_ticker(uint8_t id, uint8_t row_id, const char *s, font
   int len = strlen(s);
   int16_t datalen = getStringWidth(s, font);
   int8_t cw;
-  Serial.printf("Start ticker: font: %d, char/line: %d, strlen: %d, datalen: %d\n", font, linelen, len, datalen);
+  Serial.printf("Start ticker: font: %d, char/line: %d, strlen: %d (UTF-8 len %d), datalen: %d\n", font, linelen, len, StrLen(s), datalen);
   if(id >= _nr_tickers) {
     Serial.printf("Cannot create ticker id %d for row %d\n", id, row_id);
     return; // out of bounds
@@ -666,10 +803,16 @@ void ssd1306_class::start_ticker(uint8_t id, uint8_t row_id, const char *s, font
     TY.idx = 0;
     TY.len = datalen - OLED_LCDWIDTH; // Including a full blank line
     uint8_t * mem = TY.data;
-    for(int i = 0; i < len; i++) { // fill the data with graphic text
-      cw = GET_FONT_CHAR_WIDTH(f, s[i]);
-      if(s[i] >= f->first_char && s[i] <= f->last_char)
-        memcpy(mem, GET_FONT_DATA(f,s[i]), cw);
+    for(int i = 0; i < len;) { // fill the data with graphic text
+      uint8_t c = s[i++];
+      if((c & 0xC0) == 0xC0) { // UTF-8 code
+        c = UTF8toCP437(c, s[i]);
+        if(c != 0) i++;
+      }
+      //Serial.printf("%02X ", s[i]); // OMT: debug
+      cw = GET_FONT_CHAR_WIDTH(f,c);
+      if(c >= f->first_char && c <= f->last_char)
+        memcpy(mem, GET_FONT_DATA(f,c), cw);
       else 
         memset(mem, 0, cw);
       mem += cw + f->whitespace;
