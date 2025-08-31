@@ -10449,10 +10449,10 @@
 		)
 		(uuid "363e8b4b-e19e-4360-b5b2-a2b6343066f2")
 	)
-	(text_box "NOTE: Possibly you need to remove card in J4 before flash program the ESP32"
+	(text_box "NOTE: Possibly you need to remove card in J4 before flash program the ESP32. If still not possible to program the ESP32, you can either program the ESP32 module separately, or try with R3 removed. "
 		(exclude_from_sim no)
-		(at 251.46 138.43 0)
-		(size 28.7599 5.5452)
+		(at 240.03 136.525 0)
+		(size 38.735 9.525)
 		(stroke
 			(width 0)
 			(type default)
