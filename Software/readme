@@ -1,12 +1,12 @@
-This sketch has been built with Arduino IDE 2.3.2 and ESP32 board package 2.0.17.
+This sketch has been built with Arduino IDE 2.3.10 and ESP32 board package 3.3.10.
 
 It should be no problem to use a newer or older IDE version, however these instructions
-are for the 2.3.2 - 2.3.4 versions. Please note that the sketch will not run when
-compiled with ESP32 board package 3.0.0 or higher.
+are for the 2.3.10 version. Please note that the sketch will not run when compiled with
+ESP32 board package 3.3.11 or higher, beacause of an IRAM overflow by 184 bytes.
 
 Step 1: Download the Arduino IDE software from:
         https://www.arduino.cc/en/software
-        (Possibly scroll down on the page for 2.3.2)
+        (Possibly seach the page for 2.3.10)
  
 Step 2: Open Arduino IDE and install the ESP32 packages:
         https://randomnerdtutorials.com/installing-the-esp32-board-in-arduino-ide-windows-instructions/
@@ -37,7 +37,7 @@ Step 8: Choose the port of the ESP32 module via menu:
          
 Step 9: To see the debug info, you can open a serial monitor:
         Tools => Serial Monitor
-        And set the baud rate to 115200
+        And set the baud rate to 1000000
          
 Step 10: Compile and upload the sketch:
          Sketch => Upload (or press the (->) button)

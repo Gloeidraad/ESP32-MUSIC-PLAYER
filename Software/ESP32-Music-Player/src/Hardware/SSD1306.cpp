@@ -9,6 +9,8 @@
 #define SH1106_CONTROLLER      1  // Set to 1 if you want to support SH1106 also, instead of SSD1306 only 
 #define SH1106_LCDWIDTH      132  // Internally 132 pixels, visible 128 pixels
 
+#define USE_PSRAM  // Use PSRAM when available
+
 // SH1106 command definitions
 #define SH1106_CMD_SETMUX    (uint8_t)0xA8 // Set multiplex ratio (N, number of lines active on display)
 #define SH1106_CMD_SETOFFS   (uint8_t)0xD3 // Set display offset
@@ -92,6 +94,40 @@
   #define SSD1306_SPI_SPEED   10000000  // SSD1306 = 10 MHz according to dataheets
 #endif
 
+//=======================================================
+// Helper functions
+//=======================================================
+
+void * ssd1306_class::ssd1306_malloc(size_t size) { // Try to alloc in PSRAM if possible
+  void * ptr;
+  const char *s;
+  if(_use_psram && psramFound()) {
+    ptr = ps_malloc(size);
+    s = "ps_malloc";
+  }
+  else {
+    ptr = malloc(size);
+    s = "malloc";
+  }
+  Serial.printf("ssd1306_malloc %s: ptr=%lx, size=%d\n", s, ptr, size);
+  return ptr;  
+}
+
+void * ssd1306_class::ssd1306_calloc(size_t n, size_t size) { // Try to alloc in PSRAM if possible
+  void * ptr;
+  const char *s;
+  if(_use_psram && psramFound()) {
+    ptr = ps_calloc(n, size);
+    s = "ps_calloc";
+  }
+  else {
+    ptr = calloc(n, size);
+    s = "calloc";
+  }
+  Serial.printf("ssd1306_calloc %s: ptr=%lx, n=%d, size=%d, bytes=%d\n", s, ptr, n, size, n*size);
+  return ptr;  
+}
+
 // Some shorthand helper functions for font list
 
 inline const uint8_t * GET_FONT_DATA(const font_t * f, uint8_t c) {
@@ -144,7 +180,7 @@ inline uint8_t GET_FONT_CHAR_WIDTH(const font_t * f, uint8_t c) {
 typedef struct { uint16_t utf8; uint8_t cp437; } utf8_lookup_table_t;
 
 // Remark: Characters not in CP 437 are repaced with unaccented base character
-uint8_t utf8_C380_C3BF_table[] =  {
+const uint8_t utf8_C380_C3BF_table[] =  {
   0x9F, // À   LATIN CAPITAL LETTER A WITH GRAVE (U+00C0)   c380
   0x9E, // Á   LATIN CAPITAL LETTER A WITH ACUTE (U+00C1)   c381
   'A',  // Â   LATIN CAPITAL LETTER A WITH CIRCUMFLEX (U+00C2)   c382
@@ -211,7 +247,7 @@ uint8_t utf8_C380_C3BF_table[] =  {
   0x98, // ÿ   LATIN SMALL LETTER Y WITH DIAERESIS (U+00FF)   c3bf
 };
 
-utf8_lookup_table_t utf8_C2xx_lookup_table[] =  {
+const utf8_lookup_table_t utf8_C2xx_lookup_table[] =  {
   //0xC2A2, 0x9B, // ASCII 'cent'
   0xC2A3, 0x9C, // ASCII 'pound'
   //0xC2A5, 0x9D, // ASCII 'yen'
@@ -442,18 +478,20 @@ ssd1306_class::ssd1306_class(uint8_t rows, uint8_t tickers) {
   _font_id = SSD1306_FONT_8X8;
   _nr_rows    = rows;
   _nr_tickers = tickers;
+  #if 0
   if(_nr_rows > 0) {
-    _lines   = (line_t *)malloc(rows * sizeof(line_t));
-    memset(_lines, 0, rows * sizeof(line_t));
+    _lines   = (line_t *)malloc(_nr_rows * sizeof(line_t));
+    memset(_lines, 0, _nr_rows * sizeof(line_t));
     for(int i = 0; i < _nr_rows && i < OLED_LCDROWS; i++) {
       _lines[i].row    = i; 
       _lines[i].active = 1;
     }
   }
   if(_nr_tickers > 0) {
-    _tickers = (ticker_t *)malloc(tickers * sizeof(ticker_t));
-    memset(_tickers, 0, tickers * sizeof(ticker_t));
+    _tickers = (ticker_t *)malloc(_nr_tickers * sizeof(ticker_t));
+    memset(_tickers, 0, _nr_tickers * sizeof(ticker_t));
   }
+  #endif
 }
 #else
 ssd1306_class::ssd1306_class() {
@@ -490,10 +528,12 @@ void ssd1306_class::setport(SoftSPI & softspi, uint8_t cs, uint8_t dc) {
 ssd1306_class::~ssd1306_class() {
   #if OLED_USE_BUFFER
     free(_lines);
+    #ifndef DISABLE_TICKERS
     for(int i = 0; i < _nr_tickers; i++) {
       if(_tickers[i].data != NULL) free(_tickers[i].data);
     } 
     free(_tickers); 
+    #endif
   #endif
 }
 
@@ -509,8 +549,27 @@ void ssd1306_class::resume() {
   }
 }
 
-uint8_t ssd1306_class::initialize(uint8_t flags, uint32_t speed) {
+uint8_t ssd1306_class::initialize(uint8_t flags, uint32_t speed
+#if OLED_USE_BUFFER
+   , uint8_t use_psram
+#endif
+   ) {
   delay_ms(10);
+  #if OLED_USE_BUFFER
+  _use_psram = use_psram;
+  if(_nr_rows > 0) {
+    _lines = (line_t *)ssd1306_calloc(_nr_rows, sizeof(line_t));
+    for(int i = 0; i < _nr_rows && i < OLED_LCDROWS; i++) {
+      _lines[i].row    = i; 
+      _lines[i].active = 1;
+    }
+  }
+  #ifndef DISABLE_TICKERS
+    if(_nr_tickers > 0) {
+      _tickers = (ticker_t *)ssd1306_calloc(_nr_tickers, sizeof(ticker_t));
+    }
+  #endif
+  #endif
   // check for SH1106 controller
   if(_wire != NULL) {
     _speed = (speed < 10000) ? SSD1306_I2C_SPEED : speed;
@@ -647,7 +706,7 @@ uint16_t ssd1306_class::getStringWidth(const char *str, font_id_t font_id) {
     cn += font->whitespace;
     c = *str++;
   }
-  if(cn > 0) cn -= font->whitespace; // strip whitespace of last char
+  if(cn > font->whitespace) cn -= font->whitespace; // strip whitespace of last char
   return cn;
 }
 
@@ -667,19 +726,27 @@ uint16_t ssd1306_class::puts_right_aligned(const char * s, font_id_t font) {
 
 #if OLED_USE_BUFFER
 
-void ssd1306_class::Print(void) {
-  Serial.printf("OLED: width=%d, height=%d, text lines=%d, mem size=%d\n", OLED_LCDWIDTH,OLED_LCDHEIGHT,OLED_LCDROWS,SSD1306_LCDMEMSIZE);
-  Serial.printf("      buffer lines=%d, buffer memory=%d\n", _nr_rows, _nr_rows * sizeof(line_t));
-  Serial.printf("      tickers=%d, ticker memory=%d\n", _nr_tickers, _nr_tickers * sizeof(ticker_t));
-
-  Serial.println("Buffer configuration");
-  for(int i = 0; i <_nr_rows; i++) 
-    Serial.printf("Line %d, row %d, active %d, update %d\n",i, _lines[i].row, _lines[i].active, _lines[i].update);
-
-  Serial.println("Ticker configuration");
-  for(int i = 0; i <_nr_tickers; i++) 
-    Serial.printf("ID %d, row_id %d, scroll_delay %d, delay_counter %d, len %d, idx %d\n", i, _tickers[i].row_id, 
-                   _tickers[i].scroll_delay, _tickers[i].delay_counter, _tickers[i].len, _tickers[i].idx);
+void ssd1306_class::Print(bool oled_info, bool line_info, bool ticker_info) {
+  if(oled_info) {
+    Serial.printf("OLED: width=%d, height=%d, text lines=%d, mem size=%d\n", OLED_LCDWIDTH,OLED_LCDHEIGHT,OLED_LCDROWS,SSD1306_LCDMEMSIZE);
+    Serial.printf("      buffer lines=%d, buffer memory=%d\n", _nr_rows, _nr_rows * sizeof(line_t));
+    #ifndef DISABLE_TICKERS
+      Serial.printf("      tickers=%d, ticker memory=%d\n", _nr_tickers, _nr_tickers * sizeof(ticker_t));
+    #endif
+  }
+  if(line_info) {
+    Serial.println("Buffer configuration");
+    for(int i = 0; i <_nr_rows; i++) 
+      Serial.printf("Line %d, row %d, active %d, update %d\n",i, _lines[i].row, _lines[i].active, _lines[i].update);
+  }
+  if(ticker_info) {
+  #ifndef DISABLE_TICKERS
+    Serial.println("Ticker configuration");
+    for(int i = 0; i <_nr_tickers; i++) 
+      Serial.printf("ID %d, row_id %d, scroll_delay %d, delay_counter %d, len %d, idx %d, data_len %d\n", i, _tickers[i].row_id, 
+                     _tickers[i].scroll_delay, _tickers[i].delay_counter, _tickers[i].len, _tickers[i].idx, _tickers[i].data_len);
+  #endif
+  }
 }
 
 void ssd1306_class::putch(uint8_t c, font_id_t font) {
@@ -751,28 +818,34 @@ void ssd1306_class::display(bool force_all) {
 // News Ticker Routines
 //=====================================================================
 
-#define TY _tickers[id]
+#ifndef DISABLE_TICKERS
+  #define TY _tickers[id]
+#endif
 
 void ssd1306_class::update_ticker(uint8_t id) {
-  if(TY.len > 0 && TY.data != NULL && _timestamp - TY.timestamp_prev > TY.timestamp_speed) {
-    TY.timestamp_prev = _timestamp;
-    if(TY.delay_counter) {
-      TY.delay_counter--;
-    }
-    else {
-      if(++TY.idx < TY.len) {
-        memcpy(_lines[TY.row_id].row_data, &TY.data[TY.idx], OLED_LCDWIDTH); 
-        _lines[TY.row_id].update = 1;
+  #ifndef DISABLE_TICKERS
+    if(id < _nr_tickers && TY.len > 0 && TY.data != NULL && _timestamp - TY.timestamp_prev > TY.timestamp_speed) {
+      TY.timestamp_prev = _timestamp;
+      if(TY.delay_counter) {
+        TY.delay_counter--;
       }
       else {
-        TY.delay_counter = TY.scroll_delay;
-        TY.idx = 0;
-        memcpy(_lines[TY.row_id].row_data, TY.data, OLED_LCDWIDTH); 
-        _lines[TY.row_id].update = 1;
+        if(++TY.idx < TY.len) {
+          memcpy(_lines[TY.row_id].row_data, &TY.data[TY.idx], OLED_LCDWIDTH); 
+          _lines[TY.row_id].update = 1;
+        }
+        else {
+          TY.delay_counter = TY.scroll_delay;
+          TY.idx = 0;
+          memcpy(_lines[TY.row_id].row_data, TY.data, OLED_LCDWIDTH); 
+          _lines[TY.row_id].update = 1;
+        }
       }
     }
-  }
+  #endif
 }
+
+//TICKER_MIN_DATALEN_PSRAM TICKER_MIN_DATALEN
 
 void ssd1306_class::start_ticker(uint8_t id, uint8_t row_id, const char *s, font_id_t font, uint16_t speed, uint16_t scrolldelay) {
   const font_t *f = &ssd1306_fonts[font];
@@ -780,6 +853,7 @@ void ssd1306_class::start_ticker(uint8_t id, uint8_t row_id, const char *s, font
   int len = strlen(s);
   int16_t datalen = getStringWidth(s, font);
   int8_t cw;
+  int16_t min_data_len;
   Serial.printf("Start ticker: font: %d, char/line: %d, strlen: %d (UTF-8 len %d), datalen: %d\n", font, linelen, len, StrLen(s), datalen);
   if(id >= _nr_tickers) {
     Serial.printf("Cannot create ticker id %d for row %d\n", id, row_id);
@@ -792,12 +866,37 @@ void ssd1306_class::start_ticker(uint8_t id, uint8_t row_id, const char *s, font
     puts(0, row_id, s, font); // show the line
   }
   else {
+    #ifndef DISABLE_TICKERS
+    #if 1
+    datalen += 2 * OLED_LCDWIDTH; // reserve extra for nice flow
+    min_data_len = (_use_psram && psramFound()) ? TICKER_MIN_DATALEN_PSRAM : TICKER_MIN_DATALEN;
+    if(TY.data == NULL) {
+      TY.data_len = (datalen + 1) < min_data_len ? min_data_len : (datalen + 1);
+      TY.data = (uint8_t *)ssd1306_malloc(TY.data_len);
+      Serial.printf("Alloc new ticker buffer: id %d, row %d, bytes %d\n", id, row_id, TY.data_len);
+    }
+    else {
+      if((datalen + 1) <= TY.data_len) { 
+        Serial.printf("Reusing ticker buffer: id %d, row %d, bytes %d\n", id, row_id, TY.data_len);
+      }
+      else {
+        free(TY.data);
+        TY.data_len = datalen + 1;
+        TY.data = (uint8_t *)ssd1306_malloc(TY.data_len);
+        Serial.printf("Realloc ticker buffer: id %d, row %d, bytes %d\n", id, row_id, TY.data_len);
+      }
+    }
+    memset(TY.data, 0, datalen);
+    #else
     datalen += 2 * OLED_LCDWIDTH; // reserve extra for nice flow
     Serial.printf("Alloc new text buffer: %d bytes\n", datalen + 1);
+    //TY.data = (uint8_t *)ssd1306_malloc(datalen + 1);
+    TY.data = (uint8_t *)ssd1306_malloc(datalen + OLED_LCDWIDTH + 1); // reserve some extra for UTF8 excess room
+    memset(TY.data, 0, datalen);
+    #endif
+ 
     TY.timestamp_prev  = _timestamp;
     TY.timestamp_speed = speed;
-    TY.data = (uint8_t *)malloc(datalen + 1);
-    memset(TY.data, 0, datalen);
     TY.scroll_delay  = scrolldelay;
     TY.delay_counter = scrolldelay;
     TY.idx = 0;
@@ -821,10 +920,12 @@ void ssd1306_class::start_ticker(uint8_t id, uint8_t row_id, const char *s, font
     memcpy(&TY.data[TY.len], TY.data, OLED_LCDWIDTH);
     memcpy(_lines[TY.row_id].row_data, TY.data, OLED_LCDWIDTH); // copy start of data to screen
     _lines[TY.row_id].update = 1;
+    #endif
   }
 }
 
 void ssd1306_class::stop_ticker(uint8_t id, bool id_is_y) {
+  #ifndef DISABLE_TICKERS
   if(id_is_y) {
     for(int i = 0; i < _nr_tickers; i++) { 
       if(_tickers[i].row_id == id) {
@@ -834,13 +935,15 @@ void ssd1306_class::stop_ticker(uint8_t id, bool id_is_y) {
     }
   }
   else {
-    if(TY.data != NULL) {
-      Serial.printf("Free ticker text buffer\n");
-      free(TY.data);
-      TY.data = NULL;
-      TY.len  = 0;
-    }
+    if(id < _nr_tickers) TY.len  = 0;
+    //if(id < _nr_tickers && TY.data != NULL) {
+    //  Serial.printf("Free ticker text buffer\n");
+    //  free(TY.data);
+    //  TY.data = NULL;
+    //  TY.len  = 0;
+    //}
   }
+  #endif
 }
 
 //=====================================================================

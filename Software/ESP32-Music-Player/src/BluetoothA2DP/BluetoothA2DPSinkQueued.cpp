@@ -1,20 +1,21 @@
-#include <Arduino.h>  // OMT: Added for max(a,b)
 
 #include "BluetoothA2DPSinkQueued.h"
+
+#if IS_VALID_PLATFORM
 
 void BluetoothA2DPSinkQueued::bt_i2s_task_start_up(void) {
     ESP_LOGI(BT_APP_TAG, "ringbuffer data empty! mode changed: RINGBUFFER_MODE_PREFETCHING");
     ringbuffer_mode = RINGBUFFER_MODE_PREFETCHING;
-    if ((s_i2s_write_semaphore = xSemaphoreCreateBinary()) == NULL) {
+    if ((s_i2s_write_semaphore = xSemaphoreCreateBinary()) == nullptr) {
         ESP_LOGE(BT_APP_TAG, "%s, Semaphore create failed", __func__);
         return;
     }
-    if ((s_ringbuf_i2s = xRingbufferCreate(i2s_ringbuffer_size, RINGBUF_TYPE_BYTEBUF)) == NULL) {
+    if ((s_ringbuf_i2s = xRingbufferCreate(i2s_ringbuffer_size, RINGBUF_TYPE_BYTEBUF)) == nullptr) {
         ESP_LOGE(BT_APP_TAG, "%s, ringbuffer create failed", __func__);
         return;
     }
-    //xTaskCreate(bt_i2s_task_handler, "BtI2STask", 2048, NULL, configMAX_PRIORITIES - 3, &s_bt_i2s_task_handle);
-    BaseType_t result = xTaskCreatePinnedToCore(ccall_i2s_task_handler, "BtI2STask", i2s_stack_size, NULL, i2s_task_priority, &s_bt_i2s_task_handle, task_core);
+    //xTaskCreate(bt_i2s_task_handler, "BtI2STask", 2048, nullptr, configMAX_PRIORITIES - 3, &s_bt_i2s_task_handle);
+    BaseType_t result = xTaskCreatePinnedToCore(ccall_i2s_task_handler, "BtI2STask", i2s_stack_size, nullptr, i2s_task_priority, &s_bt_i2s_task_handle, task_core);
     if (result!=pdPASS){
         ESP_LOGE(BT_AV_TAG, "xTaskCreatePinnedToCore");
     } else {
@@ -33,7 +34,7 @@ void BluetoothA2DPSinkQueued::bt_i2s_task_shut_down(void) {
     }
     if (s_i2s_write_semaphore) {
         vSemaphoreDelete(s_i2s_write_semaphore);
-        s_i2s_write_semaphore = NULL;
+        s_i2s_write_semaphore = nullptr;
     }
 
     ESP_LOGI(BT_AV_TAG, "BtI2STask shutdown");
@@ -42,7 +43,7 @@ void BluetoothA2DPSinkQueued::bt_i2s_task_shut_down(void) {
 /* NEW I2S Task & ring buffer */
 
 void BluetoothA2DPSinkQueued::i2s_task_handler(void *arg) {
-    uint8_t *data = NULL;
+    uint8_t *data = nullptr;
     size_t item_size = 0;
     /**
      * The total length of DMA buffer of I2S is:
@@ -65,8 +66,10 @@ void BluetoothA2DPSinkQueued::i2s_task_handler(void *arg) {
         // receive data from ringbuffer and write it to I2S DMA transmit buffer 
         data = (uint8_t *)xRingbufferReceiveUpTo(s_ringbuf_i2s, &item_size, (TickType_t)pdMS_TO_TICKS(i2s_ticks), i2s_write_size_upto);
         if (item_size == 0) {
-            ESP_LOGI(BT_APP_TAG, "ringbuffer underflowed! mode changed: RINGBUFFER_MODE_PREFETCHING");
-            ringbuffer_mode = RINGBUFFER_MODE_PREFETCHING;
+            if (ringbuffer_mode != RINGBUFFER_MODE_PREFETCHING) {
+                ESP_LOGI(BT_APP_TAG, "ringbuffer underflowed! mode changed: RINGBUFFER_MODE_PREFETCHING");
+                ringbuffer_mode = RINGBUFFER_MODE_PREFETCHING;
+            }
             continue;
         } 
 
@@ -81,7 +84,7 @@ void BluetoothA2DPSinkQueued::i2s_task_handler(void *arg) {
         }
 
         vRingbufferReturnItem(s_ringbuf_i2s, (void *)data);
-        delay(5);
+        delay_ms(5);
     }
 }
 
@@ -94,15 +97,15 @@ size_t BluetoothA2DPSinkQueued::write_audio(const uint8_t *data, size_t size)
     if (!is_i2s_active){
         ESP_LOGW(BT_APP_TAG, "i2s is not active: we try to activate it");
         out->begin();
-        delay(200);
+        delay_ms(200);
     }
 
     if (ringbuffer_mode == RINGBUFFER_MODE_DROPPING) {
         ESP_LOGW(BT_APP_TAG, "ringbuffer is full, drop this packet!");
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 0, 0)
-        vRingbufferGetInfo(s_ringbuf_i2s, NULL, NULL, NULL, NULL, &item_size);
+        vRingbufferGetInfo(s_ringbuf_i2s, nullptr, nullptr, nullptr, nullptr, &item_size);
 #else
-        vRingbufferGetInfo(s_ringbuf_i2s, NULL, NULL, NULL, &item_size);
+        vRingbufferGetInfo(s_ringbuf_i2s, nullptr, nullptr, nullptr, &item_size);
 #endif
         if (item_size <= i2s_ringbuffer_prefetch_size()) {
             ESP_LOGI(BT_APP_TAG, "ringbuffer data decreased! mode changed: RINGBUFFER_MODE_PROCESSING");
@@ -120,9 +123,9 @@ size_t BluetoothA2DPSinkQueued::write_audio(const uint8_t *data, size_t size)
 
     if (ringbuffer_mode == RINGBUFFER_MODE_PREFETCHING) {
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 0, 0)
-        vRingbufferGetInfo(s_ringbuf_i2s, NULL, NULL, NULL, NULL, &item_size);
+        vRingbufferGetInfo(s_ringbuf_i2s, nullptr, nullptr, nullptr, nullptr, &item_size);
 #else
-        vRingbufferGetInfo(s_ringbuf_i2s, NULL, NULL, NULL, &item_size);
+        vRingbufferGetInfo(s_ringbuf_i2s, nullptr, nullptr, nullptr, &item_size);
 #endif
 
         if (item_size >= i2s_ringbuffer_prefetch_size()) {
@@ -136,3 +139,5 @@ size_t BluetoothA2DPSinkQueued::write_audio(const uint8_t *data, size_t size)
 
     return done ? size : 0;
 }
+
+#endif // platform

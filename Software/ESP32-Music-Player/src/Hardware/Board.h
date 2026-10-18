@@ -19,7 +19,7 @@
 #define DEBUG_MSG_VAL4(s,v1,v2,v3,v4) 
 #endif
 
-#define SERIAL_BAUD_RATE        115200
+#define SERIAL_BAUD_RATE        1000000  //was 115200
 
 #define I2C_HIGH_CLOCK_SPEED    400000
 #define I2C_LOW_CLOCK_SPEED     100000
@@ -119,6 +119,8 @@
 #define KEY_MENU         4
 #define KEY_LONG_DN      11
 #define KEY_LONG_UP      12
+#define KEY_LONG_OK      13
+#define KEY_LONG_MENU    14
 #define KEY_NONE         0xFF
 
 #define BOOT_KEY1_MASK   0x01

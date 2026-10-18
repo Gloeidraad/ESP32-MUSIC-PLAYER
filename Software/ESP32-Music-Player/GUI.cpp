@@ -1,12 +1,17 @@
-#include <string.h>
-#include <stdio.h>
-#include "src/Hardware/board.h"
+
+#include "src/Hardware/Board.h"
 #include "src/Settings.h"
+#include "src/AudioI2S/Audio.h"
 #include "GUI.h"
-#include "display.h"
-#include "Player.h"
+#include "Display.h"
+
+#if 1
+
+#define USE_VOLUME_CONTROL  1  // 0 = no volume control (modulator, etc.); 1 = with volume control (stand alone player)
 
 #define MENU_DEBUG(s) Serial.printf(s)
+
+extern Audio audio;
 
 /*****************************************************************************/
 /*  Menu texts                                                               */
@@ -37,7 +42,7 @@ GUI_STRING MENU_STEREO_MONO       = "Audio Output";
 static char CurrentTrackTimeString[10]; // first char holds offset
 
 static void CurrentTrackTimeToString() {
-    unsigned t = Settings.CurrentTrackTime;
+    unsigned t = Settings.V().CurrentTrackTime;
     CurrentTrackTimeString[0] = 5; // index to first valid char
     CurrentTrackTimeString[9] = 0;
     CurrentTrackTimeString[8] = t % 10 + '0'; t = t / 10;
@@ -57,22 +62,23 @@ static void CurrentTrackTimeToString() {
 /*  Menu defines and variables                                               */
 /*****************************************************************************/
 
-#define MENU_DELAY_PLAYER      8  // seconds
-#define MENU_DELAY_SEEK        10 // seconds
+#define MENU_DELAY_PLAYER        8  // seconds
+#define MENU_DELAY_SEEK         10  // seconds
 
-#define MENU_FUNC_INIT         0
-#define MENU_FUNC_CALLBACK     1
-#define MENU_FUNC_TICK         2  // Occurs every tenth of a second
-#define MENU_FUNC_KEY_UP       3
-#define MENU_FUNC_KEY_DN       4
-#define MENU_FUNC_KEY_OK       5
-#define MENU_FUNC_KEY_MENU     6
-#define MENU_FUNC_EXIT         7
-#define MENU_FUNC_KEY_LONG_UP  8
-#define MENU_FUNC_KEY_LONG_DN  9
+#define MENU_FUNC_INIT           0
+#define MENU_FUNC_CALLBACK       1
+#define MENU_FUNC_TICK           2  // Occurs every tenth of a second
+#define MENU_FUNC_KEY_UP         3
+#define MENU_FUNC_KEY_DN         4
+#define MENU_FUNC_KEY_OK         5
+#define MENU_FUNC_KEY_MENU       6
+#define MENU_FUNC_EXIT           7
+#define MENU_FUNC_KEY_LONG_UP    8
+#define MENU_FUNC_KEY_LONG_DN    9
+#define MENU_FUNC_KEY_LONG_MENU 10
 
-#define MENU_RESULT_EXIT       50
-#define MENU_RESULT_SETUP      52
+#define MENU_RESULT_EXIT        50
+#define MENU_RESULT_SETUP       51
 
 static int menu_delay_100ms = 0; // Menu counter for delay in tenths of a second
 static int menu_edit_val    = 0; // Value will be copied to settings when confirmed
@@ -103,34 +109,41 @@ static int MenuPlayer(int function) {
     case MENU_FUNC_INIT     : MENU_DEBUG("MenuPlayer: INIT\n");
                               Display.PrepareMenuScreen(false);
                               break;
-#if 0
+#if !USE_VOLUME_CONTROL
     case MENU_FUNC_KEY_DN   : MENU_DEBUG("MenuPlayer: KEY_DN\n");
                               return GUI_RESULT_PREV_PLAY;
     case MENU_FUNC_KEY_UP   : MENU_DEBUG("MenuPlayer: KEY_UP\n");
                               return GUI_RESULT_NEXT_PLAY;
 #else
-    case MENU_FUNC_KEY_LONG_DN : MENU_DEBUG("MenuPlayer: KEY_LONG_DN\n");
-                                 return GUI_RESULT_PREV_PLAY;
-    case MENU_FUNC_KEY_LONG_UP : MENU_DEBUG("MenuPlayer: KEY_LONG_UP\n");
-                                 return GUI_RESULT_NEXT_PLAY;
-    case MENU_FUNC_KEY_DN   : MENU_DEBUG("MenuPlayer: KEY_DN\n");
-                              if(Settings.NV.Volume > SET_VOLUME_MIN) {
-                                Settings.NV.Volume--;
-                                return GUI_RESULT_NEW_VOLUME;
-                              }
-                              break;
-    case MENU_FUNC_KEY_UP   : MENU_DEBUG("MenuPlayer: KEY_UP\n");
-                              if(Settings.NV.Volume < SET_VOLUME_MAX) {
-                                Settings.NV.Volume++;
-                                return GUI_RESULT_NEW_VOLUME;
-                              }
-                              break;
+    case MENU_FUNC_KEY_LONG_DN: MENU_DEBUG("MenuPlayer: KEY_LONG_DN\n");
+                                return GUI_RESULT_PREV_PLAY;
+    case MENU_FUNC_KEY_LONG_UP: MENU_DEBUG("MenuPlayer: KEY_LONG_UP\n");
+                                return GUI_RESULT_NEXT_PLAY;
+    case MENU_FUNC_KEY_DN     : MENU_DEBUG("MenuPlayer: KEY_DN\n");
+                                //if(Settings.NV().Volume > SET_VOLUME_MIN) {
+                                //  Settings.NV().Volume--;
+                                //  return GUI_RESULT_NEW_VOLUME;
+                                //}
+                                return GUI_RESULT_VOLUME_DOWN;
+                                break;
+    case MENU_FUNC_KEY_UP     : MENU_DEBUG("MenuPlayer: KEY_UP\n");
+                                //if(Settings.NV().Volume < SET_VOLUME_MAX) {
+                                //  Settings.NV().Volume++;
+                                //  return GUI_RESULT_NEW_VOLUME;
+                                //}
+                                return GUI_RESULT_VOLUME_UP;
+                                break;
 #endif
     case MENU_FUNC_KEY_OK   : MENU_DEBUG("Menu Player: KEY_OK\n");
                               return GUI_RESULT_PAUSE_PLAY;
     case MENU_FUNC_KEY_MENU : MENU_DEBUG("MenuPlayer: KEY_MENU\n");
                               Display.PrepareMenuScreen(true);
                               return MENU_RESULT_EXIT;
+                              break;
+    case MENU_FUNC_KEY_LONG_MENU:
+                              MENU_DEBUG("MenuPlayer: KEY_LONG_MENU\n");
+                              Display.PrepareMenuScreen(true);
+                              return MENU_RESULT_SETUP;
                               break;
   }
   return GUI_RESULT_NOP;
@@ -147,7 +160,7 @@ static void MenuSourceAdjust(int adj) {
 
 static int MenuSource(int function) {
   switch(function) {
-    case MENU_FUNC_INIT     : menu_edit_val = Settings.NV.SourceAF;
+    case MENU_FUNC_INIT     : menu_edit_val = Settings.NV().SourceAF;
                               Display.ShowMenuStrings(MENU_TEXT_SOURCE0, NULL, MENU_OK_CONFIRM);
                               MenuSourceAdjust(0);
                               break;
@@ -156,9 +169,11 @@ static int MenuSource(int function) {
                               break;
     case MENU_FUNC_KEY_UP   : MenuSourceAdjust(1);  break;
     case MENU_FUNC_KEY_DN   : MenuSourceAdjust(-1); break;
-    case MENU_FUNC_KEY_OK   : Settings.NewSourceAF = menu_edit_val; 
+    case MENU_FUNC_KEY_OK   : Settings.V().NewSourceAF = menu_edit_val; 
                               return GUI_RESULT_NEW_AF_SOURCE;
     case MENU_FUNC_KEY_MENU : return MENU_RESULT_EXIT;
+    case MENU_FUNC_KEY_LONG_MENU:
+                              return MENU_RESULT_SETUP;
     case MENU_FUNC_EXIT     : break;
   };
   return GUI_RESULT_NOP;
@@ -169,22 +184,22 @@ static int MenuSource(int function) {
 /*****************************************************************************/
 
 static void MenuSelectSsidAdjust(int adj) {
-  if(Settings.NV.TotalSsid == 0) {
+  if(Settings.NV().TotalSsid == 0) {
     Display.ShowMenuStrings(NULL, "No Network found", NULL);
     //Display.StartTicker("Insert SD Card with \"ssid.ini\", and restart the board.");
     MENU_RESET_TIMEOUT(MENU_DELAY_PLAYER);
   }
   else {
-    MenuValueAdjust(adj, 0, Settings.NV.TotalSsid - 1, 1);
+    MenuValueAdjust(adj, 0, Settings.NV().TotalSsid - 1, 1);
     Display.ShowMenuStrings(NULL, SsidSettings.GetSsid(menu_edit_val), NULL);
   }
 }
 
 static int MenuSelectSsid(int function) {
   switch(function) {
-    case MENU_FUNC_INIT     : if(Settings.NV.SourceAF != SET_SOURCE_WEB_RADIO)
+    case MENU_FUNC_INIT     : if(Settings.NV().SourceAF != SET_SOURCE_WEB_RADIO)
                                 return MENU_RESULT_EXIT; // go to next menu item
-                              menu_edit_val = Settings.NV.CurrentSsid;
+                              menu_edit_val = Settings.NV().CurrentSsid;
                               Display.ShowMenuStrings(MENU_TEXT_SSID0, NULL, MENU_OK_CONFIRM);
                               MenuSelectSsidAdjust(0);
                               break;
@@ -193,10 +208,12 @@ static int MenuSelectSsid(int function) {
                               break;
     case MENU_FUNC_KEY_UP   : MenuSelectSsidAdjust(1);  break;
     case MENU_FUNC_KEY_DN   : MenuSelectSsidAdjust(-1); break;
-    case MENU_FUNC_KEY_OK   : Settings.NV.CurrentSsid = menu_edit_val;   
+    case MENU_FUNC_KEY_OK   : Settings.NV().CurrentSsid = menu_edit_val;   
                               return GUI_RESULT_NEW_SSID;
     case MENU_FUNC_KEY_MENU : return MENU_RESULT_EXIT;
-    case MENU_FUNC_EXIT     : //if(Settings.NV.SourceAF == SET_SOURCE_WEB_RADIO && Settings.NV.TotalSsid == 0)
+    case MENU_FUNC_KEY_LONG_MENU:
+                              return MENU_RESULT_SETUP;
+    case MENU_FUNC_EXIT     : //if(Settings.NV().SourceAF == SET_SOURCE_WEB_RADIO && Settings.NV().TotalSsid == 0)
                               //  Display.StartTicker("");
                               break;
   };
@@ -209,7 +226,7 @@ static int MenuSelectSsid(int function) {
 
 static void MenuTrackAdjust(int adj) {
   char text[32];
-  MenuValueAdjust(adj, 1, Settings.NV.DiskTotalTracks, 1);
+  MenuValueAdjust(adj, 1, Settings.NV().DiskTotalTracks, 1);
   const char * track_name = TrackSettings.GetTrackName(menu_edit_val);
   int len = strlen(track_name);
   strncpy(text, track_name, 31);
@@ -224,13 +241,13 @@ static void MenuTrackAdjust(int adj) {
 static int MenuTrack(int function) {
   switch(function) {
     case MENU_FUNC_INIT     : Serial.println("OMT Menu Track");
-                              if(Settings.NV.SourceAF == SET_SOURCE_SD_CARD && Settings.NV.DiskTotalTracks > 2) {
-                                menu_edit_val = Settings.NV.DiskCurrentTrack;
+                              if(Settings.NV().SourceAF == SET_SOURCE_SD_CARD && Settings.NV().DiskTotalTracks > 2) {
+                                menu_edit_val = Settings.NV().DiskCurrentTrack;
                                 Display.ShowMenuStrings(MENU_SELECT_TRACK, NULL, MENU_OK_CONFIRM);
                               }
                               else
                                return MENU_RESULT_EXIT;
-                              Settings.NewTrack = 0;                              
+                              Settings.V().NewTrack = 0;                              
                               MenuTrackAdjust(0);
                               break;
     case MENU_FUNC_TICK     : if(--menu_delay_100ms == 0)
@@ -238,12 +255,14 @@ static int MenuTrack(int function) {
                               break;
     case MENU_FUNC_KEY_UP   : MenuTrackAdjust(1);  break;
     case MENU_FUNC_KEY_DN   : MenuTrackAdjust(-1); break;
-    case MENU_FUNC_KEY_OK   : Settings.NewTrack = menu_edit_val;
+    case MENU_FUNC_KEY_OK   : Settings.V().NewTrack = menu_edit_val;
                               return GUI_RESULT_NEW_TRACK;
     case MENU_FUNC_KEY_MENU : return MENU_RESULT_EXIT;
+    case MENU_FUNC_KEY_LONG_MENU:
+                              return MENU_RESULT_SETUP;
     case MENU_FUNC_EXIT     : break;
   };
-  if(Settings.NewTrack > 0)
+  if(Settings.V().NewTrack > 0)
     return GUI_RESULT_TIMEOUT;  // Terminate this menu as soon a new track has been chosen
   return GUI_RESULT_NOP;
 }
@@ -254,7 +273,7 @@ static int MenuTrack(int function) {
 
 static void MenuStationAdjust(int adj) {
   web_station_t web_station;
-  MenuValueAdjust(adj, 1, Settings.NV.WebRadioTotalStations, 1);
+  MenuValueAdjust(adj, 1, Settings.NV().WebRadioTotalStations, 1);
   UrlSettings.GetStation(menu_edit_val, web_station);
   Display.ShowMenuStrings(NULL, web_station.name, NULL);
 }
@@ -262,13 +281,13 @@ static void MenuStationAdjust(int adj) {
 static int MenuStation(int function) {
   switch(function) {
     case MENU_FUNC_INIT     : Serial.println("OMT Menu URL");
-                              if(Settings.NV.SourceAF == SET_SOURCE_WEB_RADIO && Settings.NV.WebRadioTotalStations > 2) {
-                                menu_edit_val = Settings.NV.WebRadioCurrentStation;
+                              if(Settings.NV().SourceAF == SET_SOURCE_WEB_RADIO && Settings.NV().WebRadioTotalStations > 2) {
+                                menu_edit_val = Settings.NV().WebRadioCurrentStation;
                                 Display.ShowMenuStrings(MENU_SELECT_STATION, NULL, MENU_OK_CONFIRM);
                               }
                               else
                                 return MENU_RESULT_EXIT;
-                              Settings.NewTrack = 0;                              
+                              Settings.V().NewTrack = 0;                              
                               MenuStationAdjust(0);
                               break;
     case MENU_FUNC_TICK     : if(--menu_delay_100ms == 0)
@@ -276,12 +295,14 @@ static int MenuStation(int function) {
                               break;
     case MENU_FUNC_KEY_UP   : MenuStationAdjust(1);  break;
     case MENU_FUNC_KEY_DN   : MenuStationAdjust(-1); break;
-    case MENU_FUNC_KEY_OK   : Settings.NewTrack = menu_edit_val;
+    case MENU_FUNC_KEY_OK   : Settings.V().NewTrack = menu_edit_val;
                               return GUI_RESULT_NEW_TRACK;
     case MENU_FUNC_KEY_MENU : return MENU_RESULT_EXIT;
+    case MENU_FUNC_KEY_LONG_MENU:
+                              return MENU_RESULT_SETUP;
     case MENU_FUNC_EXIT     : break;
   };
-  if(Settings.NewTrack > 0)
+  if(Settings.V().NewTrack > 0)
     return GUI_RESULT_TIMEOUT;  // Terminate this menu as soon a new station has been chosen
   return GUI_RESULT_NOP;
 }
@@ -299,15 +320,16 @@ static struct {
 } menu_time_data;
 
 static void MenuTimeAdjust(int adj) {
-  char text[32];
+  char text[24];
   if(adj != 0) {
     if(menu_time_data.seconds) {
       if(adj > 0)                                             // if(prev) round down to current minute
         MenuValueAdjust(1, 0, menu_time_data.max_minutes, 0); // else round up to next minute
       menu_time_data.seconds = 0;
     }
-    else
+    else {
       MenuValueAdjust(adj, 0, menu_time_data.max_minutes, 0);
+    }
   }
   sprintf(text, "%d:%02d%s", menu_edit_val, menu_time_data.seconds, menu_time_data.total_time);
   Display.ShowMenuStrings(NULL, text, NULL);
@@ -323,31 +345,28 @@ static int MenuTime(int function) {
   }
   switch(function) {
     case MENU_FUNC_INIT     : MENU_DEBUG("MenuTime: INIT\n");
-                              if(Settings.NV.SourceAF != SET_SOURCE_SD_CARD || Settings.NoCard || Settings.NV.DiskTotalTracks == 0)
+                              if(Settings.NV().SourceAF != SET_SOURCE_SD_CARD || Settings.V().NoCard || Settings.NV().DiskTotalTracks == 0)
                                 return MENU_RESULT_EXIT; // go to next menu item
-
-                              SD_Audio = Player.GetAudioPlayer();
-                              if(SD_Audio == NULL)  
-                                 return MENU_RESULT_EXIT; // go to next menu item
+                              #define SD_Audio (&audio)
                               
                               menu_time_data.flag_play = SD_Audio->isRunning();
                               if(menu_time_data.flag_play) {
-                                Settings.Play = 0;
+                                Settings.V().Play = 0;
                                 SD_Audio->pauseResume(); // (temporally) stop playing
                               }
                               Display.ShowMenuStrings(MENU_TEXT_TIME, NULL, MENU_OK_CONFIRM);
-                              Settings.CurrentTrackTime  = SD_Audio->getAudioCurrentTime();
-                              Settings.TotalTrackTime    = SD_Audio->getAudioFileDuration();
-                              menu_time_data.max_minutes = Settings.TotalTrackTime / 60;
-                              sprintf(menu_time_data.total_time, "/%d:%02d", menu_time_data.max_minutes,  Settings.TotalTrackTime % 60);
-                              menu_time_data.seconds     = Settings.CurrentTrackTime % 60; // keep seconds
-                              menu_edit_val              = Settings.CurrentTrackTime / 60; // only minutes
+                              Settings.V().CurrentTrackTime  = SD_Audio->getAudioCurrentTime();
+                              Settings.V().TotalTrackTime    = SD_Audio->getAudioFileDuration();
+                              menu_time_data.max_minutes = Settings.V().TotalTrackTime / 60;
+                              sprintf(menu_time_data.total_time, "/%d:%02d", menu_time_data.max_minutes,  Settings.V().TotalTrackTime % 60);
+                              menu_time_data.seconds     = Settings.V().CurrentTrackTime % 60; // keep seconds
+                              menu_edit_val              = Settings.V().CurrentTrackTime / 60; // only minutes
                               menu_time_data.flag_select = 0;
                               MenuTimeAdjust(0);
                               MENU_RESET_TIMEOUT(MENU_DELAY_SEEK);
                               break;
     case MENU_FUNC_TICK     : if(--menu_delay_100ms == 0) {
-                                Settings.Play = menu_time_data.flag_play;
+                                Settings.V().Play = menu_time_data.flag_play;
                                 if(menu_time_data.flag_play)
                                   SD_Audio->pauseResume(); // continue playing
                                 return GUI_RESULT_TIMEOUT;
@@ -355,14 +374,21 @@ static int MenuTime(int function) {
                               break;
     case MENU_FUNC_KEY_UP   : MenuTimeAdjust(1);  break;
     case MENU_FUNC_KEY_DN   : MenuTimeAdjust(-1); break;
-    case MENU_FUNC_KEY_OK   : Settings.SeekTrackTime = menu_edit_val * 60 + menu_time_data.seconds;
+    case MENU_FUNC_KEY_OK   : Settings.V().SeekTrackTime = menu_edit_val * 60 + menu_time_data.seconds;
                               menu_time_data.flag_select = 1;
-                              Settings.Play = menu_time_data.flag_play;
+                              Settings.V().Play = menu_time_data.flag_play;
+                              if(menu_time_data.flag_play)
+                                SD_Audio->pauseResume(); // continue playing
                               return GUI_RESULT_SEEK_PLAY;
-    case MENU_FUNC_KEY_MENU : Settings.Play = menu_time_data.flag_play;
+    case MENU_FUNC_KEY_MENU : Settings.V().Play = menu_time_data.flag_play;
                               if(menu_time_data.flag_play)
                                 SD_Audio->pauseResume(); // continue playing
                               return MENU_RESULT_EXIT;
+    case MENU_FUNC_KEY_LONG_MENU:
+                              Settings.V().Play = menu_time_data.flag_play;
+                              if(menu_time_data.flag_play)
+                                SD_Audio->pauseResume(); // continue playing
+                              return MENU_RESULT_SETUP;
     case MENU_FUNC_EXIT     : break;
   };
   return GUI_RESULT_NOP;
@@ -382,7 +408,7 @@ static void MenuSpeakerVolumeShowSelect() {
 
 static void MenuSpeakerVolumeShowLevel() {
   char text[32];
-  //sprintf(text, MENU_TEXT_VOLUME1_VOL, Settings.NV.VolAux1, Settings.NV.VolAux2);
+  //sprintf(text, MENU_TEXT_VOLUME1_VOL, Settings.NV().VolAux1, Settings.NV().VolAux2);
   //Display_ShowMenuStrings(NULL, text, NULL);
   MENU_RESET_TIMEOUT(MENU_DELAY_PLAYER);
 }
@@ -397,10 +423,10 @@ static void MenuSpeakeVolumeAdjustVol(int adj) {
   #if 0
   unsigned char *v1,*v2;
   if(SpeakerVolumeSelect == 0) {
-    if(Settings.NV.VolAux1 <= Settings.NV.VolAux2)
-      { v1 = &Settings.NV.VolAux1; v2 = &Settings.NV.VolAux2; }
+    if(Settings.NV().VolAux1 <= Settings.NV().VolAux2)
+      { v1 = &Settings.NV().VolAux1; v2 = &Settings.NV().VolAux2; }
     else
-      { v1 = &Settings.NV.VolAux2; v2 = &Settings.NV.VolAux1; }
+      { v1 = &Settings.NV().VolAux2; v2 = &Settings.NV().VolAux1; }
     if(*v1 + adj < SET_VOLUME_MIN)
       { *v2 = SET_VOLUME_MIN + *v2 - *v1; *v1 = SET_VOLUME_MIN; }
     else if(*v2 + adj > SET_VOLUME_MAX)
@@ -409,17 +435,17 @@ static void MenuSpeakeVolumeAdjustVol(int adj) {
       { *v1 += adj; *v2 += adj; }
   }
   else {
-    MenuSpeakerVolumeAdjustVal(&Settings.NV.VolAux1, -adj);
-    MenuSpeakerVolumeAdjustVal(&Settings.NV.VolAux2,  adj);
+    MenuSpeakerVolumeAdjustVal(&Settings.NV().VolAux1, -adj);
+    MenuSpeakerVolumeAdjustVal(&Settings.NV().VolAux2,  adj);
     // balance cannot be odd; adjust if necessary
-    if(Settings.NV.VolAux1 == SET_VOLUME_MAX && Settings.NV.VolAux2 & 1)
-      MenuSpeakerVolumeAdjustVal(&Settings.NV.VolAux2, -1);
-    if(Settings.NV.VolAux2 == SET_VOLUME_MAX && Settings.NV.VolAux1 & 1)
-      MenuSpeakerVolumeAdjustVal(&Settings.NV.VolAux1, -1);
-    if(Settings.NV.VolAux1 == SET_VOLUME_MIN && Settings.NV.VolAux2 & 1)
-      MenuSpeakerVolumeAdjustVal(&Settings.NV.VolAux2, 1);
-    if(Settings.NV.VolAux2 == SET_VOLUME_MIN && Settings.NV.VolAux1 & 1)
-      MenuSpeakerVolumeAdjustVal(&Settings.NV.VolAux1, 1);
+    if(Settings.NV().VolAux1 == SET_VOLUME_MAX && Settings.NV().VolAux2 & 1)
+      MenuSpeakerVolumeAdjustVal(&Settings.NV().VolAux2, -1);
+    if(Settings.NV().VolAux2 == SET_VOLUME_MAX && Settings.NV().VolAux1 & 1)
+      MenuSpeakerVolumeAdjustVal(&Settings.NV().VolAux1, -1);
+    if(Settings.NV().VolAux1 == SET_VOLUME_MIN && Settings.NV().VolAux2 & 1)
+      MenuSpeakerVolumeAdjustVal(&Settings.NV().VolAux2, 1);
+    if(Settings.NV().VolAux2 == SET_VOLUME_MIN && Settings.NV().VolAux1 & 1)
+      MenuSpeakerVolumeAdjustVal(&Settings.NV().VolAux1, 1);
   }
   MenuSpeakerVolumeShowLevel();
   #endif
@@ -445,6 +471,8 @@ static int MenuVolumeControl(int function) {
                               //else                    TFT_ICONS(0,0,MENUFONT_BALANCE,0);
                               break;
     case MENU_FUNC_KEY_MENU : return MENU_RESULT_EXIT;
+    case MENU_FUNC_KEY_LONG_MENU:
+                              return MENU_RESULT_SETUP;
     //case MENU_FUNC_ENC_CCW  : MenuSpeakeVolumeAdjustVol(-1); return GUI_RESULT_NEW_VOLUME;
     //case MENU_FUNC_ENC_CW   : MenuSpeakeVolumeAdjustVol(1);  return GUI_RESULT_NEW_VOLUME;
     case MENU_FUNC_EXIT     : /*AuxVolToString();*/ break;
@@ -466,9 +494,9 @@ static void MenuWifiTxLevelAdjust(int adj) {
 
 static int MenuWifiTxLevel(int function) {
   switch(function) {
-    case MENU_FUNC_INIT     : if(Settings.NV.SourceAF != SET_SOURCE_WEB_RADIO)
+    case MENU_FUNC_INIT     : if(Settings.NV().SourceAF != SET_SOURCE_WEB_RADIO)
                                 return MENU_RESULT_EXIT; // go to next menu item
-                              menu_edit_val = Settings.NV.WifiTxIndex;
+                              menu_edit_val = Settings.NV().WifiTxIndex;
                               Display.ShowMenuStrings(MENU_WIFI_TX_INDEX0, NULL, MENU_OK_CONFIRM);
                               MenuWifiTxLevelAdjust(0);
                               break;
@@ -477,9 +505,11 @@ static int MenuWifiTxLevel(int function) {
                               break;
     case MENU_FUNC_KEY_UP   : MenuWifiTxLevelAdjust(-1); break;
     case MENU_FUNC_KEY_DN   : MenuWifiTxLevelAdjust(1);  break;
-    case MENU_FUNC_KEY_OK   : Settings.NV.WifiTxIndex = menu_edit_val;
+    case MENU_FUNC_KEY_OK   : Settings.NV().WifiTxIndex = menu_edit_val;
                               return GUI_RESULT_NEW_WIFI_TX_LEVEL;
     case MENU_FUNC_KEY_MENU : return MENU_RESULT_EXIT;
+    case MENU_FUNC_KEY_LONG_MENU:
+                              return MENU_RESULT_SETUP;
     case MENU_FUNC_EXIT     : break;
   };
   return GUI_RESULT_NOP;
@@ -500,10 +530,10 @@ static void MenuBtTxLevelAdjust(int adj) {
 
 static int MenuBtTxLevel(int function) {
   switch(function) {
-    case MENU_FUNC_INIT     : //if(Settings.NV.SourceAF != SET_SOURCE_BLUETOOTH)
-                              //  return MENU_RESULT_EXIT; // go to next menu item
-                              return MENU_RESULT_EXIT;  // T.b.d.
-                              menu_edit_val = Settings.NV.BtTxIndex;
+    case MENU_FUNC_INIT     : if(Settings.NV().SourceAF != SET_SOURCE_BLUETOOTH)
+                                return MENU_RESULT_EXIT; // go to next menu item
+                              //return MENU_RESULT_EXIT;  // T.b.d.
+                              menu_edit_val = Settings.NV().BtTxIndex;
                               Display.ShowMenuStrings(MENU_BT_TX_INDEX0, NULL, MENU_OK_CONFIRM);
                               MenuBtTxLevelAdjust(0);
                               break;
@@ -512,9 +542,11 @@ static int MenuBtTxLevel(int function) {
                               break;
     case MENU_FUNC_KEY_UP   : MenuBtTxLevelAdjust(1);  break;
     case MENU_FUNC_KEY_DN   : MenuBtTxLevelAdjust(-1); break;
-    case MENU_FUNC_KEY_OK   : Settings.NV.BtTxIndex = menu_edit_val;
+    case MENU_FUNC_KEY_OK   : Settings.NV().BtTxIndex = menu_edit_val;
                               return GUI_RESULT_NEW_BT_TX_LEVEL;
     case MENU_FUNC_KEY_MENU : return MENU_RESULT_EXIT;
+    case MENU_FUNC_KEY_LONG_MENU:
+                              return MENU_RESULT_SETUP;
     case MENU_FUNC_EXIT     : break;
   };
   return GUI_RESULT_NOP;
@@ -525,13 +557,13 @@ static int MenuBtTxLevel(int function) {
 /*****************************************************************************/
 
 static void MenuStereoMonoAdjust(int adj) {
-  if(adj) Settings.NV.OutputFormat = !Settings.NV.OutputFormat;
-  const char * output_mode = Settings.NV.OutputFormat ? "Mono" : "Stereo";
+  if(adj) Settings.NV().OutputFormat = !Settings.NV().OutputFormat;
+  const char * output_mode = Settings.NV().OutputFormat ? "Mono" : "Stereo";
   Display.ShowMenuStrings(NULL, output_mode, NULL);  
 }
 
 static int MenuStereoMono(int function) {
-  const char * output_mode = Settings.NV.OutputFormat ? "Mono" : "Stereo";
+  const char * output_mode = Settings.NV().OutputFormat ? "Mono" : "Stereo";
   switch(function) {
     case MENU_FUNC_INIT     : Serial.println("OMT Menu Stereo/Mono");
                               Display.ShowMenuStrings(MENU_STEREO_MONO, NULL, "");
@@ -546,6 +578,8 @@ static int MenuStereoMono(int function) {
                               return GUI_RESULT_OUTPUT_FORMAT;
     case MENU_FUNC_KEY_OK   : break;
     case MENU_FUNC_KEY_MENU : return MENU_RESULT_EXIT;
+    case MENU_FUNC_KEY_LONG_MENU:
+                              return MENU_RESULT_SETUP;
     case MENU_FUNC_EXIT     : break;
   };
   return GUI_RESULT_NOP;
@@ -571,22 +605,25 @@ typedef struct {
 #define MENU_INDEX_SSID            4
 #define MENU_INDEX_SOURCE          5
 #define MENU_INDEX_STEREO_MONO     6
-#define MENU_INDEX_VOLUME          7 // Not used in this application
-#define MENU_INDEX_SETUP_TX_LEVEL1 8
-#define MENU_INDEX_SETUP_TX_LEVEL2 9
-#define MENU_INDEX_COUNT           10
+//#define MENU_INDEX_VOLUME          7 // Not used in this application
+#define MENU_INDEX_SETUP_TX_LEVEL1 7
+#define MENU_INDEX_SETUP_TX_LEVEL2 8
+#define MENU_INDEX_COUNT           9
 
 #define MENU_INDEX_DEFAULT         MENU_INDEX_PLAYER
-static MenuType MenuEntries[MENU_INDEX_COUNT] = {
-  { MenuPlayer,          MENU_INDEX_TRACK,           0,0 },
-  { MenuTrack,           MENU_INDEX_URL,             0,1 },
-  { MenuStation,         MENU_INDEX_TIME,            0,1 },
-  { MenuTime,            MENU_INDEX_SSID,            0,1 },
-  { MenuSelectSsid,      MENU_INDEX_SOURCE,          0,1 },
-  { MenuSource,          MENU_INDEX_STEREO_MONO,     0,1 },
-  { MenuStereoMono,      MENU_INDEX_SETUP_TX_LEVEL1, 0,1 },
-  { MenuWifiTxLevel,     MENU_INDEX_SETUP_TX_LEVEL2, 0,0 },
-  { MenuBtTxLevel,       MENU_INDEX_DEFAULT,         0,0 }
+#define MENU_INDEX_SUB             MENU_INDEX_SETUP_TX_LEVEL1
+
+static const MenuType MenuEntries[MENU_INDEX_COUNT] = {
+  { MenuPlayer,          MENU_INDEX_TRACK,           MENU_INDEX_SUB,0 },
+  { MenuTrack,           MENU_INDEX_URL,             MENU_INDEX_SUB,1 },
+  { MenuStation,         MENU_INDEX_TIME,            MENU_INDEX_SUB,1 },
+  { MenuTime,            MENU_INDEX_SSID,            MENU_INDEX_SUB,1 },
+  { MenuSelectSsid,      MENU_INDEX_SOURCE,          MENU_INDEX_SUB,1 },
+  { MenuSource,          MENU_INDEX_STEREO_MONO,     MENU_INDEX_SUB,1 },
+  { MenuStereoMono,      MENU_INDEX_PLAYER,          MENU_INDEX_SUB,1 },
+  
+  { MenuWifiTxLevel,     MENU_INDEX_SETUP_TX_LEVEL2, MENU_INDEX_DEFAULT,0 },
+  { MenuBtTxLevel,       MENU_INDEX_SETUP_TX_LEVEL1, MENU_INDEX_DEFAULT,0 }
 };
 
 #define MenuFunction(func) MenuEntries[current_menu].f(func)
@@ -632,14 +669,16 @@ int GuiCallback(int key_press) {
   if(result == GUI_RESULT_NOP) {
     if(key != 0xff) {
       switch(key) {
-        case KEY_SPARE : break;
-        case KEY_DN      : result = MenuFunction(MENU_FUNC_KEY_DN);      break;
-        case KEY_UP      : result = MenuFunction(MENU_FUNC_KEY_UP);      break;
-        case KEY_LONG_DN : result = MenuFunction(MENU_FUNC_KEY_LONG_DN); break;
-        case KEY_LONG_UP : result = MenuFunction(MENU_FUNC_KEY_LONG_UP); break;
-        case KEY_OK      : result = MenuFunction(MENU_FUNC_KEY_OK);      break;
-        case KEY_MENU    : result = MenuFunction(MENU_FUNC_KEY_MENU);    break;
+        case KEY_SPARE     : break;
+        case KEY_DN        : result = MenuFunction(MENU_FUNC_KEY_DN);        break;
+        case KEY_UP        : result = MenuFunction(MENU_FUNC_KEY_UP);        break;
+        case KEY_LONG_DN   : result = MenuFunction(MENU_FUNC_KEY_LONG_DN);   break;
+        case KEY_LONG_UP   : result = MenuFunction(MENU_FUNC_KEY_LONG_UP);   break;
+        case KEY_OK        : result = MenuFunction(MENU_FUNC_KEY_OK);        break;
+        case KEY_MENU      : result = MenuFunction(MENU_FUNC_KEY_MENU);      break;
+        case KEY_LONG_MENU : result = MenuFunction(MENU_FUNC_KEY_LONG_MENU); break;
       }
+      Serial.printf("GUI_RESULT = %d\n", result);
       key = 0xff;
     }
   }
@@ -648,6 +687,7 @@ int GuiCallback(int key_press) {
       case MENU_RESULT_SETUP:     MenuFunction(MENU_FUNC_EXIT);
                                   current_menu = MenuEntries[current_menu].next_alt;
                                   MenuFunction(MENU_FUNC_INIT);
+                                  result = MenuFunction(MENU_FUNC_INIT);
                                   break;
       case MENU_RESULT_EXIT:      MenuFunction(MENU_FUNC_EXIT);
                                   Settings.EepromStore();
@@ -663,3 +703,22 @@ int GuiCallback(int key_press) {
   } while(result == MENU_RESULT_EXIT);
   return result;
 }
+
+#else
+
+void GuiInit() {
+}
+
+int GuiCallback(int key_press) {
+  switch(key_press) {
+    case KEY_LONG_UP: return GUI_RESULT_NEXT_PLAY;
+    case KEY_LONG_DN: return GUI_RESULT_PREV_PLAY;
+    case KEY_OK:      return GUI_RESULT_PAUSE_PLAY;
+    case KEY_MENU:    return GUI_RESULT_SEEK_PLAY;
+    case KEY_UP:      return GUI_RESULT_VOLUME_UP;
+    case KEY_DN:      return GUI_RESULT_VOLUME_DOWN;
+  }
+  return GUI_RESULT_NOP;
+}
+
+#endif

@@ -39,22 +39,24 @@
 
 class SimpleWaveGeneratorClass {
   public:
-    SimpleWaveGeneratorClass(bool use_lsbj = false) : SimpleWaveGeneratorClass(-1, -1, -1, use_lsbj) {}
-    SimpleWaveGeneratorClass(uint8_t pin_bck, uint8_t pin_ws, uint8_t pin_dout, bool use_lsbj = false);
+    SimpleWaveGeneratorClass(bool use_lsbj = false, bool use_psram = false) : SimpleWaveGeneratorClass(-1, -1, -1, use_lsbj, use_psram) {}
+    SimpleWaveGeneratorClass(uint8_t pin_bck, uint8_t pin_ws, uint8_t pin_dout, bool use_lsbj = false, bool use_psram = false);
     ~SimpleWaveGeneratorClass();
     void Init(i2s_port_t port = i2s_port_t(I2S_NUM_0));
     void Start(int waveform, bool autoplay = false);
+    bool IsRunning()  { return !_pause; }
     void Pause(void)  { _pause = true;  }
     void Resume(void) { _pause = false; }
     void loop(void);
     void Volume(int vol); // 0 .. WAVEFORM_VOLUME_MAX
     #ifndef NO_WAVE_INFO
       const char *GetWaveformName(int id);
-      const char *GetWaveformName() {return GetWaveformName(_current_wave_form); }
+      const char *GetWaveformName() { return GetWaveformName(_current_wave_form); }
     #endif
     void Print(bool hex = false); // for debug purposes
     
   protected:
+    void * wavegen_calloc(size_t n, size_t size);
     typedef struct { int16_t left, right; } samples_t;
     void CreateSineWave(samples_t * dest, int samples);
     void CreateTriangleWave(samples_t * dest, int samples);
@@ -64,17 +66,18 @@ class SimpleWaveGeneratorClass {
     bool CreateWaveform(int waveform);
     
     i2s_port_t _i2s_port;
-    int  _volume; 
-    int  _current_wave_form;
-    int  _current_sample_rate;
-    int  _current_number_of_samples;
-    bool _pause;
-    bool _i2s_installed;
-    uint8_t _pin_bck;
-    uint8_t _pin_ws;
-    uint8_t _pin_dout;
-    bool _use_lsbj;
+    uint32_t _current_sample_rate;
+    uint16_t _current_number_of_samples;
     uint16_t _dac_adjust;
+    uint8_t  _volume; 
+    uint8_t  _current_wave_form;
+    uint8_t  _pin_bck;
+    uint8_t  _pin_ws;
+    uint8_t  _pin_dout;
+    uint8_t  _pause;
+    uint8_t  _i2s_installed;
+    uint8_t  _use_lsbj;
+    uint8_t  _use_psram;
     samples_t * _samples;
     #if ESP_IDF_VERSION_MAJOR == 5
       i2s_chan_handle_t _i2s_tx_handle;

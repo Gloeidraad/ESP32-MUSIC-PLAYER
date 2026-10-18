@@ -9,52 +9,60 @@
 #define DISPLAY_HELP_PRESS_PLAY_TO_START     (uint8_t)3
 #define DISPLAY_HELP_PLEASE_WAIT             (uint8_t)4
 #define DISPLAY_HELP_INITIALIZING_WEBRADIO   (uint8_t)5
-#define DISPLAY_HELP_NO_CARD                 (uint8_t)6
-#define DISPLAY_HELP_NO_TRACKS_FOUND         (uint8_t)7
-#define DISPLAY_HELP_WIFI_CONNECT_FAILED_ID  (uint8_t)8
-#define DISPLAY_HELP_URLS_FOUND              (uint8_t)9
+#define DISPLAY_HELP_RECONNECT_WEBRADIO      (uint8_t)6
+#define DISPLAY_HELP_NO_CARD                 (uint8_t)7
+#define DISPLAY_HELP_NO_TRACKS_FOUND         (uint8_t)8
+#define DISPLAY_HELP_WIFI_CONNECT_FAILED_ID  (uint8_t)9
+#define DISPLAY_HELP_NO_URLS_FOUND           (uint8_t)10
 
 class DisplayClass {
+
   public:
     DisplayClass();
     void Initialize(bool reboot, bool use_spi = false);
     void Suspend();
     void Resume();
 
+    void ShowPlayTime(uint32_t time, bool no_queue = false);
+    void ShowPlayTime(uint32_t curtime, uint32_t totaltime, bool no_queue = false);
+    void MakeTrackString(uint16_t curtrack, uint16_t totaltracks);
+    uint16_t MakeTimeString(char * s, uint16_t s_len, uint32_t time, uint32_t totaltime = -1);
+    void ShowTrackTitle(const char * title, const char * upto, bool no_queue = false);
+    void ShowStationName(const char *name, bool no_queue = false);
+
     void ShowWelcome(void);
     void ShowBaseScreen(const char * help_line);
     void ShowBaseScreen(uint8_t help_id);
-    
-    void ShowReboot(void);
-    void ShowPlayer(void);
-    void ShowPlayPause(void) { ShowPlayPause(Settings.Play); }
-    void ShowPlayPause(bool play, bool no_queue = false);
-    void ShowPlayTime(bool no_queue = false);
-    void ShowTrackNumber(void);
-    void ShowWebRadioNumber(void);
-    void ShowWebRadioConnect(bool OK);
-    void ShowBluetoothId(void);
-    void ShowBluetoothName(void);
-    
-    void ShowTrackName(const char * n, bool no_queue = false);
-    void ShowTrackTitle(const char * t, bool no_queue = false);
-    void ShowHelpLine(uint8_t help_id, bool no_queue = false);
     void ShowHelpLine(const char * s, bool no_queue = false);
-    void ShowWaveformName(const char * id);
-    void ShowWaveformId(void);
-    void ShowStationName(const char *s, bool no_queue = false);
+
+  private:
     
-    void ShowStreamTitle(const char *s);
-    void ShowLastHost(const char *s);
-    void ShowTrackEnded(const char *s);
-    void ShowStreamEnded(const char *s);
-    void ShowStation(const char *s);
+    //void ShowReboot(void);
+    //void ShowPlayer(void);
+    //void ShowBluetoothName(void);
+    
+    //void ShowTrackName(const char * n, bool no_queue = false);
+    //void ShowWaveformName(const char * id);
+    
+    //void ShowStreamTitle(const char *s);
+    //void ShowLastHost(const char *s);
+    //void ShowTrackEnded(const char *s);
+    //void ShowStreamEnded(const char *s);
+    //void ShowStation(const char *s);
+
+  public:
+    void ShowWebRadioConnect(bool OK);
+    void ShowHelpLine(uint8_t help_id, bool no_queue = false);
+    void ShowTrackTitle(const char * title, bool no_queue = false) { ShowTrackTitle(title, NULL, no_queue); }
+    //void ShowPlayPause(void) { ShowPlayPause(Settings.Play); }
+    void ShowPlayPause(bool play, bool no_queue = false);
+    void ShowWebRadioNumber(void);
+    void ShowWaveformId(void);
 
     void PrepareMenuScreen(bool menu_on); // false = leaving, true = entering
     void ShowMenuStrings(const char *s1, const char *s2, const char *s3);
-
-    void ShowVolume();
     void ShowVolume(uint8_t vol, uint8_t max);
+    void ShowVolume();
 
     void loop(uint32_t timestamp);
 
@@ -63,6 +71,10 @@ class DisplayClass {
  
     void MakeTrackString(bool web = false);
     void MakeTimeString(void);
+
+    void ShowPlayTime(bool no_queue = false);
+    void ShowTrackNumber(void);
+    void ShowBluetoothId(void);
     void ShowTrackNumberAndPlayTime(bool no_queue = false);
     void SetTrackString(const char *);
     void SetTimeString(const char *);

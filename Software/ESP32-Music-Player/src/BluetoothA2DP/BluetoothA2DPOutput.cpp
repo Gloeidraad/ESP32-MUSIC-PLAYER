@@ -1,5 +1,7 @@
 #include "BluetoothA2DPOutput.h"
 
+#if IS_VALID_PLATFORM
+
 BluetoothA2DPOutputLegacy::BluetoothA2DPOutputLegacy() {
 #if A2DP_LEGACY_I2S_SUPPORT
   // default i2s port is 0
@@ -20,7 +22,7 @@ BluetoothA2DPOutputLegacy::BluetoothA2DPOutputLegacy() {
       .tx_desc_auto_clear =
           true,  // avoiding noise in case of data unavailability
       .fixed_mclk = 0,
-      .mclk_multiple = I2S_MCLK_MULTIPLE_DEFAULT,
+      .mclk_multiple = (i2s_mclk_multiple_t) 0, // I2S_MCLK_MULTIPLE_DEFAULT
       .bits_per_chan = I2S_BITS_PER_CHAN_DEFAULT
 #else
       .tx_desc_auto_clear =
@@ -74,7 +76,7 @@ bool BluetoothA2DPOutputLegacy::begin() {
 #if A2DP_LEGACY_I2S_SUPPORT
   ESP_LOGI(BT_AV_TAG, "%s", __func__);
   // setup i2s
-  if (i2s_driver_install(i2s_port, &i2s_config, 0, NULL) != ESP_OK) {
+  if (i2s_driver_install(i2s_port, &i2s_config, 0, nullptr) != ESP_OK) {
     ESP_LOGE(BT_AV_TAG, "i2s_driver_install failed");
     rc = false;
   }
@@ -153,9 +155,7 @@ void BluetoothA2DPOutputLegacy::end() {
   ESP_LOGI(BT_AV_TAG, "%s", __func__);
   if (i2s_driver_uninstall(i2s_port) != ESP_OK) {
     ESP_LOGE(BT_AV_TAG, "Failed to uninstall i2s");
-  } else {
-    // player_init = false;
-  }
+  } 
 #endif
 }
 
@@ -171,7 +171,6 @@ void BluetoothA2DPOutputLegacy::set_sample_rate(int m_sample_rate) {
   } else {
     ESP_LOGI(BT_AV_TAG, "audio player configured, samplerate=%d",
              i2s_config.sample_rate);
-    // player_init = true;  // init finished
   }
 #endif
 }
@@ -208,8 +207,8 @@ bool BluetoothA2DPOutputAudioTools::begin() {
 size_t BluetoothA2DPOutputAudioTools::write(const uint8_t *data, size_t item_size) {
   size_t i2s_bytes_written = 0;
 
-#if A2DP_I2S_AUDIOTOOLS
-  if (p_audio_print != nullptr) {
+#if A2DP_I2S_AUDIOTOOLS || defined(ARDUINO)
+  if (p_print != nullptr) {
     i2s_bytes_written = p_print->write(data, item_size);
   }
 #endif
@@ -222,7 +221,6 @@ void BluetoothA2DPOutputAudioTools::end() {
   ESP_LOGI(BT_AV_TAG, "%s", __func__);
   if (p_audio_print != nullptr) {
     p_audio_print->end();
-    // player_init = false;
   }
 #endif
 }
@@ -232,13 +230,16 @@ void BluetoothA2DPOutputAudioTools::set_sample_rate(int m_sample_rate) {
 #if A2DP_I2S_AUDIOTOOLS
   ESP_LOGI(BT_AV_TAG, "%s %d", __func__, m_sample_rate);
   if (p_audio_print != nullptr) {
-    AudioInfo info = p_audio_print->audioInfo();
+    audio_tools::AudioInfo info = p_audio_print->audioInfo();
     if (info.sample_rate != m_sample_rate || info.channels != 2 ||
         info.bits_per_sample != 16) {
       info.sample_rate = m_sample_rate;
       info.channels = 2;
       info.bits_per_sample = 16;
       p_audio_print->setAudioInfo(info);
+      ESP_LOGI(BT_AV_TAG, "%s sample_rate %d -> %d", __func__, info.sample_rate, p_audio_print->audioInfo().sample_rate);
+    } else {
+      ESP_LOGI(BT_AV_TAG, "%s sample_rate not changed %d", __func__, info.sample_rate);
     }
   }
 #endif
@@ -260,3 +261,4 @@ void BluetoothA2DPOutputAudioTools::set_output_active(bool active) {
 #endif
 }
 
+#endif

@@ -12,6 +12,9 @@
 #define OLED_I2C_ADDRESS   0x3C  // on PIC: 0x78
 
 #define OLED_USE_BUFFER     1  // change to 0 for writing directly to module
+//#define DISABLE_TICKERS
+#define TICKER_MIN_DATALEN        256
+#define TICKER_MIN_DATALEN_PSRAM  4096
 
 #define OLED_UNKNOWN        0
 #define OLED_SH1107         1
@@ -28,7 +31,6 @@
 class ssd1306_class {
   public:
     class SoftSPI;
-    #if 1
     ssd1306_class(TwoWire & wire)                            : ssd1306_class() { setport(wire);           }
     ssd1306_class(SPIClass & spi, uint8_t cs, uint8_t dc)    : ssd1306_class() { setport(spi, cs, dc);     }
     ssd1306_class(SoftSPI & softspi, uint8_t cs, uint8_t dc) : ssd1306_class() { setport(softspi, cs, dc); }
@@ -37,29 +39,17 @@ class ssd1306_class {
       ssd1306_class(TwoWire & wire, uint8_t rows, uint8_t tickers)                            : ssd1306_class(rows, tickers) { setport(wire);            }
       ssd1306_class(SPIClass & spi, uint8_t cs, uint8_t dc, uint8_t rows, uint8_t tickers)    : ssd1306_class(rows, tickers) { setport(spi, cs, dc);     }
       ssd1306_class(SoftSPI & softspi, uint8_t cs, uint8_t dc, uint8_t rows, uint8_t tickers) : ssd1306_class(rows, tickers) { setport(softspi, cs, dc); }
+      //uint8_t initialize(uint8_t flags = 0, uint32_t speed = 0, uint8_t use_psram = false);
+      uint8_t initialize(uint8_t flags, uint32_t speed, uint8_t use_psram = false);
     #else
       ssd1306_class();
-    #endif
-
-    #else
-    ssd1306_class(TwoWire & wire) : ssd1306_class(&wire, NULL, NULL, 0, 0, 0, 0) {}
-    ssd1306_class(SPIClass & spi, uint8_t cs, uint8_t dc) : ssd1306_class(NULL, &spi, NULL, cs, dc, 0, 0) {}
-    ssd1306_class(SoftSPI & softspi, uint8_t cs, uint8_t dc) : ssd1306_class(NULL, NULL, &softspi, cs, dc, 0, 0) {}
-    #if OLED_USE_BUFFER
-      ssd1306_class(uint8_t rows = 0, uint8_t tickers = 0) : ssd1306_class(NULL, NULL, NULL, 0, 0, rows, tickers) {}
-      ssd1306_class(TwoWire & wire, uint8_t rows, uint8_t tickers) : ssd1306_class(&wire, NULL, NULL, 0, 0, rows, tickers) {}
-      ssd1306_class(SPIClass & spi, uint8_t cs, uint8_t dc, uint8_t rows, uint8_t tickers) : ssd1306_class(NULL, &spi, NULL, cs, dc, rows, tickers) {}
-      ssd1306_class(SoftSPI & softspi, uint8_t cs, uint8_t dc, uint8_t rows, uint8_t tickers) : ssd1306_class(NULL, NULL, &softspi, cs, dc, rows, tickers) {}
-    #else
-      ssd1306_class();
-    #endif
+      uint8_t initialize(uint8_t flags = 0, uint32_t speed = 0);
     #endif
 
     ~ssd1306_class();
     void setport(TwoWire & wire);
     void setport(SPIClass & spi, uint8_t cs, uint8_t dc);
     void setport(SoftSPI & softspi, uint8_t cs, uint8_t dc);
-    uint8_t initialize(uint8_t flags = 0, uint32_t speed = 0);
     void suspend(); // An open SPI port can interfere with other hardware (esp. Wifi), so suspend before initialising wifi
     void resume();  // and resume after wifi connects...
     //void clearlines(uint16_t y, uint16_t n);
@@ -104,7 +94,7 @@ class ssd1306_class {
       }
       void SwapLines(uint8_t old_id, uint8_t new_id) { ActivateLine(old_id, false); ActivateLine(new_id, true); }
       void SetLineRow(uint8_t id, uint8_t row) { if(id < _nr_rows) _lines[id].row = row; }  
-      void Print();    
+      void Print(bool oled_info = true, bool line_info = true, bool ticker_info = true);    
     #else // Some dummy routines to programming with less "#if OLED_USE_BUFFER"
       void clearbuffer(uint8_t v = 0) {}
       void display(bool force_all = false) {}
@@ -128,6 +118,8 @@ class ssd1306_class {
     void send_data(uint8_t dat, uint16_t len = 1);
     void send_data(const uint8_t * dat, uint16_t len);
     #if OLED_USE_BUFFER
+      void * ssd1306_malloc(size_t size);
+      void * ssd1306_calloc(size_t n, size_t size);
       void update_ticker(uint8_t y);
       bool check_rowupdate(void) {
         for(int i = 0; i < _nr_rows; i++)
@@ -142,16 +134,19 @@ class ssd1306_class {
         uint8_t  row_data[OLED_LCDWIDTH];
       } line_t;
     
-      typedef struct {
-        uint32_t timestamp_prev;
-        uint16_t timestamp_speed;
-        uint16_t scroll_delay;
-        uint16_t delay_counter;
-        uint16_t len;
-        uint16_t idx;
-        uint8_t  row_id; 
-        uint8_t *data;
-      } ticker_t;
+      #ifndef DISABLE_TICKERS
+        typedef struct {
+          uint32_t timestamp_prev;
+          uint16_t timestamp_speed;
+          uint16_t scroll_delay;
+          uint16_t delay_counter;
+          uint16_t len;
+          uint16_t idx;
+          uint8_t  row_id; 
+          uint16_t data_len;
+          uint8_t *data;
+        } ticker_t;
+      #endif
     #endif
 
     TwoWire * _wire;
@@ -174,8 +169,11 @@ class ssd1306_class {
       uint8_t   _nr_rows;
       uint8_t   _tickercount;
       uint8_t   _nr_tickers;
+      uint8_t   _use_psram;
       line_t   *_lines;   // Display lines, may contain more than SSD1306_LCDROWS
-      ticker_t *_tickers;
+      #ifndef DISABLE_TICKERS
+        ticker_t *_tickers;
+      #endif
     #else
       uint8_t   _y_skip;
     #endif

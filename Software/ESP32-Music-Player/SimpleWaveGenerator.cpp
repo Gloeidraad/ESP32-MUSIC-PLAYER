@@ -8,24 +8,9 @@
 
 #ifndef _BOARD_H_
   #error _BOARD_H_ not defined (uncomment this line for stand alone version)
-  #define PIN_I2S_BCK         27//33 
-  #define PIN_I2S_WS          33//25
-  #define PIN_I2S_DOUT        12//32
-#endif
-
-#ifdef USE_INTERNAL_DACS
-  //#define I2S_MODE         i2s_mode_t(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_DAC_BUILT_IN)
-  //#define I2S_COMM_FORMAT  i2s_comm_format_t(I2S_COMM_FORMAT_STAND_MSB)
-  //#define DAC_ADJUST       (int16_t)INT16_MIN 
-#else
-  //#define I2S_MODE         i2s_mode_t(I2S_MODE_MASTER | I2S_MODE_TX)
-  //#if DAC_ID == DAC_ID_MAX98357A
-  //  #define I2S_COMM_FORMAT  i2s_comm_format_t(I2S_COMM_FORMAT_STAND_I2S)    // Standard Philips format 
-  //  #define DAC_ADJUST       (int16_t)0   
-  //#else
-  //  #define I2S_COMM_FORMAT  i2s_comm_format_t(I2S_COMM_FORMAT_STAND_MSB)    // PT8211 format
-  //  #define DAC_ADJUST       (int16_t)0 
-  //#endif
+  #define PIN_I2S_DOUT    32
+  #define PIN_I2S_BCK     33
+  #define PIN_I2S_WS      25
 #endif
 
 // MAX98357A: LRCLK ONLY supports 8kHz, 16kHz, 32kHz, 44.1kHz, 48kHz, 88.2kHz and 96kHz frequencies. 
@@ -48,6 +33,20 @@
 #define NUMBER_OF_SAMPLES_DAC_TEST NUMBER_OF_SAMPLES_MAX
 
 //====================================== local functions ===============================================
+void * SimpleWaveGeneratorClass::wavegen_calloc(size_t n, size_t size) {
+  void * ptr;
+  const char *s;
+  if(_use_psram && psramFound()) {
+    ptr = ps_calloc(n, size);
+    s = "ps_calloc";
+  }
+  else {
+    ptr = calloc(n, size);
+    s = "calloc";
+  }
+  Serial.printf("wavegen_calloc %s: ptr=%lx, n=%d, size=%d, bytes=%d\n", s, ptr, n, size, n*size);
+  return ptr;  
+}
 
 void SimpleWaveGeneratorClass::CreateSineWave(samples_t * dest, int samples) {
   float scale = (float)INT16_MAX * _volume / WAVEFORM_VOLUME_MAX;
@@ -99,7 +98,7 @@ void SimpleWaveGeneratorClass::CreateDacTestMax(samples_t * dest, int samples) {
 
 //====================================== public functions ===============================================
 
- SimpleWaveGeneratorClass::SimpleWaveGeneratorClass(uint8_t pin_bck, uint8_t pin_ws, uint8_t pin_dout, bool use_lsbj ) {
+ SimpleWaveGeneratorClass::SimpleWaveGeneratorClass(uint8_t pin_bck, uint8_t pin_ws, uint8_t pin_dout, bool use_lsbj, bool use_psram) {
   _i2s_port                  = i2s_port_t(I2S_NUM_0);
   _volume                    = WAVEFORM_VOLUME_MAX;
   _current_wave_form         = WAVEFORM_NONE;
@@ -112,6 +111,7 @@ void SimpleWaveGeneratorClass::CreateDacTestMax(samples_t * dest, int samples) {
   _pin_ws                    = pin_ws   == 0xFF ? PIN_I2S_WS   : pin_ws;
   _pin_dout                  = pin_dout == 0xFF ? PIN_I2S_DOUT : pin_dout;
   _use_lsbj                  = use_lsbj;
+  _use_psram                 = use_psram;
   _dac_adjust                = 0;
 
   #if ESP_IDF_VERSION_MAJOR == 5
@@ -184,7 +184,7 @@ SimpleWaveGeneratorClass::~SimpleWaveGeneratorClass() {
 void SimpleWaveGeneratorClass::Init(i2s_port_t port) {
   _i2s_port = port;
   if(_samples == NULL) {
-    _samples = (samples_t *)calloc(NUMBER_OF_SAMPLES_MAX, sizeof(samples_t));
+    _samples = (samples_t *)wavegen_calloc(NUMBER_OF_SAMPLES_MAX, sizeof(samples_t));
   }
   if(!_i2s_installed) {
     #if ESP_IDF_VERSION_MAJOR == 5
@@ -271,10 +271,12 @@ void SimpleWaveGeneratorClass::loop(void) {
 
 #ifndef NO_WAVE_INFO
 
+static const char * const WaveNames[WAVEFORM_COUNT + 1] = { 
+  "Sine 440Hz", "Sine 1000Hz", "Triangle 440Hz", "Triangle 1000Hz",
+  "DAC Test",   "DAC Minimum", "DAC Maximum",    "Invalid Waveform"
+}; 
+
 const char *SimpleWaveGeneratorClass::GetWaveformName(int id) {
-  const char * WaveNames[WAVEFORM_COUNT + 1] = 
-    { "Sine 440Hz", "Sine 1000Hz", "Triangle 440Hz", "Triangle 1000Hz",
-      "DAC Test",   "DAC Minimum", "DAC Maximum",    "Invalid Waveform" }; 
   if(id < WAVEFORM_SINE_440HZ || id > WAVEFORM_COUNT)
     return WaveNames[WAVEFORM_COUNT];
   return WaveNames[id];

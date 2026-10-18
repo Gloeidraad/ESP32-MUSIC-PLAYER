@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <Wire.h>
 
-#include "Hardware/board.h" // For macro USE_SD_MMC
+#include "Hardware/Board.h" // For macro USE_SD_MMC
 
 #ifdef USE_SD_MMC
   #include <SD_MMC.h>
@@ -84,7 +84,7 @@
 //#define SET_SD_TRACKS_MAX        299 // should be by far enough
 //#define SET_SD_TRACKS_MAX        99  // should be by far enough
 #define SET_SD_TRACKS_MAX        5000  // should be by far enough
-#define SET_SD_TRACKS_SIZE      5000//10000  // should be enough for about 200 tracks, depending on the lengths of the file names
+#define SET_SD_TRACKS_SIZE       5000  // should be enough for about 200 tracks, depending on the lengths of the file names
 #define SET_SD_TRACKS_PS_SIZE  128000  // should be enough for about 2500 tracks, depending on the lengths of the file names
 
 #define SET_SOFT_RESET_MAGIC     0x5A    //  If this is set, the reset procedure will be different.
@@ -94,6 +94,10 @@
 #define SET_VOLUME_MIN          1
 #define SET_VOLUME_MAX         21
 #define SET_VOLUME_DEFAULT      7
+
+#define SET_PLAYBACK_STOPPED    1
+#define SET_PLAYBACK_PLAYING    2
+#define SET_PLAYBACK_PAUSED     3
 
 typedef struct {
 #pragma pack(1) // place at 8 bit boundaries
@@ -105,7 +109,7 @@ typedef struct {
   uint8_t  WaveformId;      // See "SimpleWaveGenerator.h" for the list of wave forms
   uint8_t  WifiTxIndex;     // Index in wifi tabel with TX levels
   uint8_t  BtTxIndex;       // Index in bluetooth tabel with TX levels
-  uint8_t  Subversion;      // expansion of Version
+  uint8_t  Subversion;      // Expansion of Version
   uint16_t DiskTotalTracks;
   uint16_t DiskCurrentTrack;
   uint32_t DiskTrackResumeTime;
@@ -118,7 +122,26 @@ typedef struct {
   uint8_t  OutputFormat; 
   uint8_t  BtName[32];
 #pragma pack()
-} NvSettings_t;
+} NvSettingsData_t;
+
+typedef struct {
+    uint32_t CurrentTrackTime;
+    uint32_t TotalTrackTime;
+    uint32_t SeekTrackTime;
+    uint8_t  BootKeys;
+    uint8_t  MenuId;  // 0 = player, > 0 = menu id
+    uint8_t  AudioEnded;
+    uint8_t  NoCard;
+    uint8_t  Play;
+    uint8_t  FirstTime;
+    uint8_t  FirstSong;
+    uint8_t  NewSourceAF;
+    uint8_t  NewTrack;
+    uint8_t  NewTrackTimeSet;
+    uint8_t  TrackTitleReceived;
+    uint8_t  NewVolumeReceived;
+    uint8_t  NewPlayStatusReceived;
+} SettingsData_t;
 
 class SettingsClass {
 
@@ -129,12 +152,12 @@ class SettingsClass {
     friend class UrlSettingsClass;
 
     SettingsClass(TwoWire &wire = Wire, uint32_t current_speed = 400000);
-    uint8_t      GetCurrentSourceId(void) { return NV.SourceAF; }
+    uint8_t      GetCurrentSourceId(void) { return _NvSettingsData->SourceAF; }
     const char * GetSourceName(void);
     const char * GetSourceName(uint8_t n);
 
     void SetLoopFunction(void (*f)(void)) { _loop = f; }
-    void EepromLoad(void);
+    void EepromLoad(bool may_use_psram = false);
     void EepromStore(void);
     void EepromErase(void);
     bool LoadFromCard(const char * filename);
@@ -142,8 +165,8 @@ class SettingsClass {
     void Print(void);
 
     void doSoftRestart(void);
-    bool isSoftRestart(void)    { return NV.MagicKey == SET_SOFT_RESET_MAGIC; }
-    void clearSoftRestart(void) { NV.MagicKey = 0; EepromStore(); }
+    bool isSoftRestart(void)    { return _NvSettingsData->MagicKey == SET_SOFT_RESET_MAGIC; }
+    void clearSoftRestart(void) { _NvSettingsData->MagicKey = 0; EepromStore(); }
 
     void NextPlayer(void);
     void PrevPlayer(void);
@@ -159,31 +182,17 @@ class SettingsClass {
 
     void UpdateCurrentTrackTime(int adj = 1);
     
-    uint8_t GetLogVolume(uint8_t range) { return GetLogVolume(NV.Volume, range); }
+    uint8_t GetLogVolume(uint8_t range) { return GetLogVolume(_NvSettingsData->Volume, range); }
     uint8_t GetLogVolume(uint8_t v, uint8_t range);
-    uint8_t GetLinVolume(uint8_t range) { return GetLinVolume(NV.Volume, range); }
+    uint8_t GetLinVolume(uint8_t range) { return GetLinVolume(_NvSettingsData->Volume, range); }
     uint8_t GetLinVolume(uint8_t v, uint8_t range);
 
     uint8_t GetWifiTxLevel(int index = -1);
     int8_t  GetBtTxLevel(int index = -1);
     const char * GetWifiTxLevelDB(int index = -1);
-
-    // non-volatiles start here
-    NvSettings_t NV;
-    // volatiles start here
-    uint32_t CurrentTrackTime;
-    uint32_t TotalTrackTime;
-    uint32_t SeekTrackTime;
-    uint8_t  BootKeys;
-    uint8_t  MenuId;  // 0 = player, > 0 = menu id
-    uint8_t  AudioEnded;
-    uint8_t  NoCard;
-    uint8_t  Play;
-    uint8_t  FirstTime;
-    uint8_t  FirstSong;
-    uint8_t  NewSourceAF;
-    uint8_t  NewTrack;
-    uint8_t  WebTitleReceived;
+    
+    NvSettingsData_t & NV() { return _NvSettingsData[0]; }
+    SettingsData_t & V()    { return _SettingsData[0]; }
 
   protected:
 
@@ -194,7 +203,9 @@ class SettingsClass {
     TwoWire * _wire;
     uint32_t _prevspeed;
     void (*_loop)(void);
-    NvSettings_t NvMirror;
+
+    SettingsData_t   * _SettingsData;   // volatiles stored here
+    NvSettingsData_t * _NvSettingsData; // non-volatiles stored here
 };
 
 extern SettingsClass Settings;
@@ -226,17 +237,20 @@ class SsidSettingsClass {
   public:
 
     SsidSettingsClass();
+    ~SsidSettingsClass();
     void EepromLoad(void);
-    void EepromStore(int n, wifi_credentials_t &);
     bool LoadFromCard(const char * filename);
 
     void Print(bool showpassword = false);
     const char * GetSsid(int n, bool use_zero_length = true);
     const char * GetPassword(int n) { return (const char *)_credentials[n].password; }
 
+  private:
+    void EepromStore(int n, wifi_credentials_t &);
+
   protected:
-    uint8_t   _valid;
-    wifi_credentials_t _credentials[SET_SSID_MAX+1];
+    uint8_t _valid;
+    wifi_credentials_t * _credentials;
 };
 
 extern SsidSettingsClass SsidSettings;
@@ -252,18 +266,21 @@ extern SsidSettingsClass SsidSettings;
 #define EEPROM_WEB_NAME_SIZE  16  // Your personal station name
 #define EEPROM_WEB_URL_SIZE   256 // The web address of the station
 
-typedef struct {
-  char name[EEPROM_WEB_NAME_SIZE+1];
-  uint8_t namesize;
-  const char * url;
-  uint16_t  urlsize;
-} web_station_t;
+class web_station_t {
+  public:
+    web_station_t() { memset(this, 0, sizeof(web_station_t)); }
+    char name[EEPROM_WEB_NAME_SIZE+1];
+    uint8_t namesize;
+    const char * url;
+    uint16_t urlsize;
+};
 
 class UrlSettingsClass {
 
   public:
 
     UrlSettingsClass();
+    ~UrlSettingsClass() { if(_data != NULL) delete _data; }
     void EepromLoad(void);
     bool LoadFromCard(const char * filename);
 
@@ -275,12 +292,10 @@ class UrlSettingsClass {
     void GetStation(web_station_t & web_station);
     void NextStation(void);
 
-  protected:
-
-    uint8_t  _valid;
-    uint16_t _ptr;
-    uint16_t _index;
-    uint8_t  _data[EEPROM_WEB_LIST_SIZE];
+    uint8_t   _valid;
+    uint16_t  _ptr;
+    uint16_t  _index;
+    uint8_t * _data;
 };
 
 extern UrlSettingsClass UrlSettings;
@@ -296,7 +311,8 @@ class TrackSettingsClass {
     ~TrackSettingsClass() { if(_tracks != NULL) delete _tracks; }
     void AddLoopFunction(void (*f)(void)) { _loop = f; }
 
-    bool LoadFromCard(bool keep_mounted = false);
+    bool LoadFromCard(const char * dir, bool keep_mounted = false);
+    bool LoadFromCard(bool keep_mounted = false) { return LoadFromCard("/", keep_mounted); }
     void Print(void);
     const char * GetTrackName(uint16_t n); // Note: n = 1 .. _number_of_tracks
     bool IsValid(void) { return _tracks != NULL && _number_of_tracks > 0; }

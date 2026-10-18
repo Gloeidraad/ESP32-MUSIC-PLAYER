@@ -4,11 +4,9 @@
 #include <stdlib.h>
 #include "Settings.h"
 #include "Version.h"
-#include "Hardware/board.h"
 
-#define NvData        ((unsigned char *)&NV)
-#define NvMirrorData  ((unsigned char *)&NvMirror)
-
+#define NvData        ((unsigned char *)&_NvSettingsData[0])
+#define NvMirrorData  ((unsigned char *)&_NvSettingsData[1])
 
 #if EEPROM_I2C_ADDRESS_SIZE == 1
   #error THIS APPLICATION ACCEPS ONLY EEPROMS >= 32K
@@ -23,8 +21,6 @@
   #define SD_OPEN    SD.open
   #define SD_END     SD.end
 #endif
-
-#if 1
 
 const char * const s_not_printable = "[Not Printable]";
 const char * const s_none          = "[None]";
@@ -46,6 +42,36 @@ const uint8_t wifi_power_table[SET_WIFI_TX_MAX + 1] = {
 //=======================================================
 // Helper functions
 //=======================================================
+
+static void * settings_malloc(size_t size) { // Try to alloc in PSRAM if possible
+  void * ptr;
+  const char *s;
+  if(psramFound()) {
+    ptr = ps_malloc(size);
+    s = "ps_malloc";
+  }
+  else {
+    ptr = malloc(size);
+    s = "malloc";
+  }
+  Serial.printf("settings_malloc %s: ptr=%lx, size=%d\n", s, ptr, size);
+  return ptr;  
+}
+
+static void * settings_calloc(size_t n, size_t size) { // Try to alloc in PSRAM if possible
+  void * ptr;
+  const char *s;
+  if(psramFound()) {
+    ptr = ps_calloc(n, size);
+    s = "ps_calloc";
+  }
+  else {
+    ptr = calloc(n, size);
+    s = "calloc";
+  }
+  Serial.printf("settings_calloc %s: ptr=%lx, n=%d, size=%d, bytes=%d\n", s, ptr, n, size, n*size);
+  return ptr;  
+}
 
 static int SD_read_line(File &f, char * dest, int n) {
   memset(dest, 0, n);
@@ -175,7 +201,6 @@ static void Write24Cxx(int page, int addr, uint8_t * dat, int len) {
 
 SettingsClass::SettingsClass(TwoWire &wire, uint32_t current_speed) {
   memset(this, 0, sizeof(SettingsClass));
-  _loop      = NULL;
   _prevspeed = current_speed;
   _wire      = &wire;
 }
@@ -189,14 +214,14 @@ const char * SettingsClass::GetSourceName(uint8_t n) {
 
 uint8_t SettingsClass::GetWifiTxLevel(int index) {
   if(index < 0)
-    index = NV.WifiTxIndex;
-  return index <= SET_WIFI_TX_MAX ? wifi_power_table[NV.WifiTxIndex] : 0;
+    index = NV().WifiTxIndex;
+  return index <= SET_WIFI_TX_MAX ? wifi_power_table[NV().WifiTxIndex] : 0;
 }
 
 const char * SettingsClass::GetWifiTxLevelDB(int index) {
   static char tx_in_db[6];
   if(index < 0)
-    index = NV.WifiTxIndex;
+    index = NV().WifiTxIndex;
   if(index > SET_WIFI_TX_MAX) {
     return "[ERR]";
   }
@@ -209,76 +234,85 @@ const char * SettingsClass::GetWifiTxLevelDB(int index) {
 
 int8_t SettingsClass::GetBtTxLevel(int index) {
   if(index < 0)
-    index = NV.BtTxIndex;
+    index = NV().BtTxIndex;
   return index <= SET_BT_TX_MAX ? 3 * (index - 4) : 9;
 }
 
-const char * SettingsClass::GetSourceName(void) { return GetSourceName(NV.SourceAF); }
+const char * SettingsClass::GetSourceName(void) { return GetSourceName(NV().SourceAF); }
 
 void SettingsClass::doSoftRestart(void) {
-  NV.MagicKey = SET_SOFT_RESET_MAGIC;
+  NV().MagicKey = SET_SOFT_RESET_MAGIC;
   EepromStore();
   esp_restart();
 }
 
-void SettingsClass::EepromLoad(void) {
+void SettingsClass::EepromLoad(bool may_use_psram) { // Must be called before any access to member data
   const char * subversion = SOFTWARE_SUBVERSION;
   DEBUG_MSG_VAL2("EEPROM type 24C%02d (size = %d bytes)\n", EEPROM_TYPE, EEPROM_SIZE);
+
+  if(_SettingsData == NULL) {
+    if(may_use_psram) _SettingsData = (SettingsData_t *)settings_calloc(1, sizeof(SettingsData_t));
+    else              _SettingsData = (SettingsData_t *)calloc(1, sizeof(SettingsData_t));
+  }
+  if(_NvSettingsData == NULL) {
+    if(may_use_psram) _NvSettingsData = (NvSettingsData_t *)settings_calloc(2, sizeof(NvSettingsData_t));
+    else              _NvSettingsData = (NvSettingsData_t *)calloc(2, sizeof(NvSettingsData_t));
+  }
   // Read from EEPROM
   SetWireClock();
-  Read24Cxx(0, 0, NvData, sizeof(NvSettings_t));
+  Read24Cxx(0, 0, NvData, sizeof(NvSettingsData_t));
   RestoreWireClock();
-  if(NV.Version != SETTINGS_VERSION || NV.Subversion != subversion[0]) {
-    memset(NvData, 0xFF, sizeof(NvSettings_t)); // New version, reset to defaults
+  if(NV().Version != SETTINGS_VERSION || NV().Subversion != subversion[0]) {
+    memset(NvData, 0xFF, sizeof(NvSettingsData_t)); // New version, reset to defaults
   }
-  memcpy(NvMirrorData, NvData, sizeof(NvSettings_t));
-  NV.Version    = SETTINGS_VERSION;
-  NV.Subversion = subversion[0];
+  memcpy(NvMirrorData, NvData, sizeof(NvSettingsData_t));
+  NV().Version    = SETTINGS_VERSION;
+  NV().Subversion = subversion[0];
 #if 1
   // Check for valid entries
-  NV.SourceAF         = Validate(NV.SourceAF,    0,                    SET_SOURCE_MAX,      SET_SOURCE_DEFAULT);
-  NV.WaveformId       = Validate(NV.WaveformId,  SET_WAVE_FORM_MIN,    SET_WAVE_FORM_MAX,   SET_WAVE_DEFAULT);
-  NV.WifiTxIndex      = Validate(NV.WifiTxIndex, 0,                    SET_WIFI_TX_MAX,      SET_WIFI_TX_DEFAULT);
-  NV.BtTxIndex        = Validate(NV.BtTxIndex,   0,                    SET_BT_TX_MAX,       SET_BT_TX_DEFAULT);
-  NV.VolumeSteps      = Validate(NV.VolumeSteps, SET_VOLUME_MIN,       SET_VOLUME_MAX,      SET_VOLUME_MAX);
+  NV().SourceAF         = Validate(NV().SourceAF,    0,                    SET_SOURCE_MAX,      SET_SOURCE_DEFAULT);
+  NV().WaveformId       = Validate(NV().WaveformId,  SET_WAVE_FORM_MIN,    SET_WAVE_FORM_MAX,   SET_WAVE_DEFAULT);
+  NV().WifiTxIndex      = Validate(NV().WifiTxIndex, 0,                    SET_WIFI_TX_MAX,      SET_WIFI_TX_DEFAULT);
+  NV().BtTxIndex        = Validate(NV().BtTxIndex,   0,                    SET_BT_TX_MAX,       SET_BT_TX_DEFAULT);
+  NV().VolumeSteps      = Validate(NV().VolumeSteps, SET_VOLUME_MIN,       SET_VOLUME_MAX,      SET_VOLUME_MAX);
   #if DAC_ID == DAC_ID_PT8211
-    NV.Volume         = Validate(NV.Volume,      SET_VOLUME_MIN,       NV.VolumeSteps,      SET_VOLUME_DEFAULT);
+    NV().Volume         = Validate(NV().Volume,      SET_VOLUME_MIN,       NV().VolumeSteps,      SET_VOLUME_DEFAULT);
   #else
-    NV.Volume         = Validate(NV.Volume,      SET_VOLUME_MIN,       NV.VolumeSteps,      NV.VolumeSteps);
+    NV().Volume         = Validate(NV().Volume,      SET_VOLUME_MIN,       NV().VolumeSteps,      NV().VolumeSteps);
   #endif
-  NV.OutputFormat     = Validate(NV.OutputFormat, 0, 1, 0);;
-  NV.DiskTotalTracks  = Validate(NV.DiskTotalTracks, 0, SET_SD_TRACKS_MAX + 1, 0); 
-  NV.DiskCurrentTrack = Validate(NV.DiskCurrentTrack, 1, NV.DiskTotalTracks, 1);
-  NV.CurrentSsid      = Validate(NV.CurrentSsid, 0, SET_SSID_MAX, 0);
-  NV.TotalSsid        = Validate(NV.TotalSsid,   0, SET_SSID_MAX + 1, 0);
-  NV.WebRadioCurrentStation = Validate(NV.WebRadioCurrentStation, 1, SET_WEBRADIO_MAX, 1);
-  NV.WebRadioTotalStations  = Validate(NV.WebRadioTotalStations,  0, SET_WEBRADIO_MAX, 0);
+  NV().OutputFormat     = Validate(NV().OutputFormat, 0, 1, 0);;
+  NV().DiskTotalTracks  = Validate(NV().DiskTotalTracks, 0, SET_SD_TRACKS_MAX + 1, 0); 
+  NV().DiskCurrentTrack = Validate(NV().DiskCurrentTrack, 1, NV().DiskTotalTracks, 1);
+  NV().CurrentSsid      = Validate(NV().CurrentSsid, 0, SET_SSID_MAX, 0);
+  NV().TotalSsid        = Validate(NV().TotalSsid,   0, SET_SSID_MAX + 1, 0);
+  NV().WebRadioCurrentStation = Validate(NV().WebRadioCurrentStation, 1, SET_WEBRADIO_MAX, 1);
+  NV().WebRadioTotalStations  = Validate(NV().WebRadioTotalStations,  0, SET_WEBRADIO_MAX, 0);
 
-  if(NV.MagicKey != SET_SOFT_RESET_MAGIC)  NV.MagicKey = 0;
-  if(NV.DiskTrackResumeTime == UINT32_MAX) NV.DiskTrackResumeTime = 0;
-  if(NV.DiskTrackResumePos  == UINT32_MAX) NV.DiskTrackResumePos  = 0;
-  if(NV.DiskTrackTotalTime  == UINT32_MAX) NV.DiskTrackTotalTime  = 0;
-  if(NV.BtName[0] < 0x21 || NV.BtName[0] >= 127) {
-    strcpy((char*)NV.BtName, BT_DEVICE_NAME);
+  if(NV().MagicKey != SET_SOFT_RESET_MAGIC)  NV().MagicKey = 0;
+  if(NV().DiskTrackResumeTime == UINT32_MAX) NV().DiskTrackResumeTime = 0;
+  if(NV().DiskTrackResumePos  == UINT32_MAX) NV().DiskTrackResumePos  = 0;
+  if(NV().DiskTrackTotalTime  == UINT32_MAX) NV().DiskTrackTotalTime  = 0;
+  if(NV().BtName[0] < 0x21 || NV().BtName[0] >= 127) {
+    strcpy((char*)NV().BtName, BT_DEVICE_NAME);
   }
 #endif
   // Save corrected entries if necessary
   EepromStore();
   // Init voltatiles
-  _prevspeed       = 0;
-  CurrentTrackTime = 0;
-  TotalTrackTime   = 0;
-  SeekTrackTime    = 0;
-  AudioEnded       = 0;
-  NoCard           = 1;
-  Play             = 0;
-  FirstTime        = 1;
-  NewSourceAF      = NV.SourceAF;
+  _prevspeed           = 0;
+  V().CurrentTrackTime = 0;
+  V().TotalTrackTime   = 0;
+  V().SeekTrackTime    = 0;
+  V().AudioEnded       = 0;
+  V().NoCard           = 1;
+  V().Play             = 0;
+  V().FirstTime        = 1;
+  V().NewSourceAF      = NV().SourceAF;
 
 }
 
 void SettingsClass::EepromStore(void) {
-  for(int i = 0; i < sizeof(NvSettings_t); i++) {
+  for(int i = 0; i < sizeof(NvSettingsData_t); i++) {
     if(NvMirrorData[i] != NvData[i]) {
       NvMirrorData[i] = NvData[i];
       SetWireClock();
@@ -290,18 +324,22 @@ void SettingsClass::EepromStore(void) {
 }
 
 void SettingsClass::EepromErase(void) {
-  uint8_t FF[EEPROM_PAGE_SIZE];
+  uint8_t FF[EEPROM_PAGE_SIZE]; // Page size here is 32, so still no need to alloc in PSRAM
   memset(FF, 0xFF, EEPROM_PAGE_SIZE);
   SetWireClock();
-  for(int i = 0; i < sizeof(NvSettings_t); i += EEPROM_PAGE_SIZE) {
+  for(int i = 0; i < sizeof(NvSettingsData_t); i += EEPROM_PAGE_SIZE) {
     Write24CxxPage(i, FF); // Erase the contents
   }
   RestoreWireClock();
 }
 
 bool SettingsClass::LoadFromCard(const char * filename) {
-  char fn[32];
-  
+  char fn[32]; // 32? No need to alloc in PSRAM
+  if(_SettingsData == NULL || _NvSettingsData == NULL) {
+    Serial.println("ERROR: Cannot read settings from file before reading from EEPROM");
+    return false;
+  }
+
   Serial.printf("Reading \"%s\"", filename);
   if(strlen(filename) > sizeof(fn) - 1) {
     Serial.println(" failed, file name too long");
@@ -309,7 +347,7 @@ bool SettingsClass::LoadFromCard(const char * filename) {
   }
   if(!SD_BEGIN()) {
     Serial.println("Card Mount Failed, Cannot read Bluetooth name");
-    Settings.NoCard = 1;
+    Settings.V().NoCard = 1;
     return false;
   }
   
@@ -320,8 +358,8 @@ bool SettingsClass::LoadFromCard(const char * filename) {
     Serial.println(" failed to open file");
     return false;
   }
-  if(!SD_read_line(f, (char *)NV.BtName, sizeof(NV.BtName))) 
-    strcpy((char*)NV.BtName, BT_DEVICE_NAME); // failed: use default name  
+  if(!SD_read_line(f, (char *)NV().BtName, sizeof(NV().BtName))) 
+    strcpy((char*)NV().BtName, BT_DEVICE_NAME); // failed: use default name  
   EepromStore();
   f.close();
   return true;
@@ -332,116 +370,110 @@ bool SettingsClass::LoadFromCard(const char * filename) {
 #define PRINT_SETTINGS_VALUE(v,f)   Serial.printf("  " #v " = %" #f "\n", v), loop()
 
 void SettingsClass::Print(void) {
-  Serial.printf("  Settings.NV.Version = %x.%02x\n", NV.Version >> 8, NV.Version & 0xFF); loop();
-  PRINT_SETTINGS_VALUE_DEC(Settings.NV.SourceAF);
-  PRINT_SETTINGS_VALUE_DEC(Settings.NV.CurrentSsid);
-  PRINT_SETTINGS_VALUE_DEC(Settings.NV.TotalSsid);
-  PRINT_SETTINGS_VALUE_HEX(Settings.NV.MagicKey);
-  PRINT_SETTINGS_VALUE_DEC(Settings.NV.WaveformId);
-  PRINT_SETTINGS_VALUE_DEC(Settings.NV.WifiTxIndex);
-  PRINT_SETTINGS_VALUE_DEC(Settings.NV.BtTxIndex);
-  PRINT_SETTINGS_VALUE_HEX(Settings.NV.Subversion);
-  PRINT_SETTINGS_VALUE_DEC(Settings.NV.DiskTotalTracks);
-  PRINT_SETTINGS_VALUE_DEC(Settings.NV.DiskCurrentTrack);
-  PRINT_SETTINGS_VALUE_DEC(Settings.NV.DiskTrackResumeTime);
-  PRINT_SETTINGS_VALUE_DEC(Settings.NV.DiskTrackResumePos);
-  PRINT_SETTINGS_VALUE_DEC(Settings.NV.DiskTrackTotalTime);
-  PRINT_SETTINGS_VALUE_DEC(Settings.NV.WebRadioCurrentStation);
-  PRINT_SETTINGS_VALUE_DEC(Settings.NV.WebRadioTotalStations);
-  PRINT_SETTINGS_VALUE(Settings.NV.BtName,s);
-  PRINT_SETTINGS_VALUE_DEC(Settings.NV.Volume);
-  PRINT_SETTINGS_VALUE_DEC(Settings.NV.VolumeSteps);
-  PRINT_SETTINGS_VALUE_DEC(Settings.NV.OutputFormat);
+  Serial.printf("  Settings.NV().Version = %x.%02x\n", NV().Version >> 8, NV().Version & 0xFF); loop();
+  PRINT_SETTINGS_VALUE_DEC(Settings.NV().SourceAF);
+  PRINT_SETTINGS_VALUE_DEC(Settings.NV().CurrentSsid);
+  PRINT_SETTINGS_VALUE_DEC(Settings.NV().TotalSsid);
+  PRINT_SETTINGS_VALUE_HEX(Settings.NV().MagicKey);
+  PRINT_SETTINGS_VALUE_DEC(Settings.NV().WaveformId);
+  PRINT_SETTINGS_VALUE_DEC(Settings.NV().WifiTxIndex);
+  PRINT_SETTINGS_VALUE_DEC(Settings.NV().BtTxIndex);
+  PRINT_SETTINGS_VALUE_HEX(Settings.NV().Subversion);
+  PRINT_SETTINGS_VALUE_DEC(Settings.NV().DiskTotalTracks);
+  PRINT_SETTINGS_VALUE_DEC(Settings.NV().DiskCurrentTrack);
+  PRINT_SETTINGS_VALUE_DEC(Settings.NV().DiskTrackResumeTime);
+  PRINT_SETTINGS_VALUE_DEC(Settings.NV().DiskTrackResumePos);
+  PRINT_SETTINGS_VALUE_DEC(Settings.NV().DiskTrackTotalTime);
+  PRINT_SETTINGS_VALUE_DEC(Settings.NV().WebRadioCurrentStation);
+  PRINT_SETTINGS_VALUE_DEC(Settings.NV().WebRadioTotalStations);
+  PRINT_SETTINGS_VALUE(Settings.NV().BtName,s);
+  PRINT_SETTINGS_VALUE_DEC(Settings.NV().Volume);
+  PRINT_SETTINGS_VALUE_DEC(Settings.NV().VolumeSteps);
+  PRINT_SETTINGS_VALUE_DEC(Settings.NV().OutputFormat);
   
-  PRINT_SETTINGS_VALUE(Settings.CurrentTrackTime,d);
-  PRINT_SETTINGS_VALUE(Settings.TotalTrackTime,d);
-  PRINT_SETTINGS_VALUE(Settings.SeekTrackTime,d);
-  PRINT_SETTINGS_VALUE(Settings.BootKeys,d);
-  PRINT_SETTINGS_VALUE(Settings.MenuId,d);
-  PRINT_SETTINGS_VALUE(Settings.AudioEnded,d);
-  PRINT_SETTINGS_VALUE(Settings.NoCard,d);
-  PRINT_SETTINGS_VALUE(Settings.Play,d);
-  PRINT_SETTINGS_VALUE(Settings.FirstTime,d);
-  PRINT_SETTINGS_VALUE(Settings.FirstSong,d);
-  PRINT_SETTINGS_VALUE(NewSourceAF,d);
-  PRINT_SETTINGS_VALUE(NewTrack,d);
+  PRINT_SETTINGS_VALUE(Settings.V().CurrentTrackTime,d);
+  PRINT_SETTINGS_VALUE(Settings.V().TotalTrackTime,d);
+  PRINT_SETTINGS_VALUE(Settings.V().SeekTrackTime,d);
+  PRINT_SETTINGS_VALUE(Settings.V().BootKeys,d);
+  PRINT_SETTINGS_VALUE(Settings.V().MenuId,d);
+  PRINT_SETTINGS_VALUE(Settings.V().AudioEnded,d);
+  PRINT_SETTINGS_VALUE(Settings.V().NoCard,d);
+  PRINT_SETTINGS_VALUE(Settings.V().Play,d);
+  PRINT_SETTINGS_VALUE(Settings.V().FirstTime,d);
+  //PRINT_SETTINGS_VALUE(Settings.FirstSong,d);
+  PRINT_SETTINGS_VALUE(Settings.V().NewSourceAF,d);
+  PRINT_SETTINGS_VALUE(Settings.V().NewTrack,d);
+  PRINT_SETTINGS_VALUE(Settings.V().NewTrackTimeSet,d);
+  PRINT_SETTINGS_VALUE(Settings.V().TrackTitleReceived,d);
+  PRINT_SETTINGS_VALUE(Settings.V().NewVolumeReceived,d);
+  PRINT_SETTINGS_VALUE(Settings.V().NewPlayStatusReceived,d);
+}
+
+static uint16_t next_item(uint16_t current, uint16_t min, uint16_t max) {
+  return current < max ? current + 1 : min;
+}
+
+static uint16_t prev_item(uint16_t current, uint16_t min, uint16_t max) {
+  return current > min ? current - 1 : max;
 }
 
 void SettingsClass::NextPlayer(void) {
-  if(Settings.NV.SourceAF >= SET_SOURCE_MAX)
-    Settings.NV.SourceAF = SET_SOURCE_MIN;
-  else 
-    Settings.NV.SourceAF++;
+  Settings.NV().SourceAF = next_item(Settings.NV().SourceAF, SET_SOURCE_MIN, SET_SOURCE_MAX);
 }
 
 void SettingsClass::PrevPlayer(void) {
-  if(Settings.NV.SourceAF == SET_SOURCE_MIN)
-    Settings.NV.SourceAF = SET_SOURCE_MAX;
-  else 
-    Settings.NV.SourceAF--;
+  Settings.NV().SourceAF = prev_item(Settings.NV().SourceAF, SET_SOURCE_MIN, SET_SOURCE_MAX);
 }
 
 void SettingsClass::PrevDiskTrack(void) {
-  if(NV.DiskTotalTracks > 0) {
-    if(NV.DiskCurrentTrack > 1)
-      NV.DiskCurrentTrack--;
-    else
-      NV.DiskCurrentTrack = NV.DiskTotalTracks;
+  if(NV().DiskTotalTracks > 0) {
+    NV().DiskCurrentTrack = prev_item(NV().DiskCurrentTrack, 1, NV().DiskTotalTracks);
   }
 }
 
 void SettingsClass::NextDiskTrack(void) {
-  if(NV.DiskTotalTracks > 0) {
-    if (Settings.NV.DiskCurrentTrack < Settings.NV.DiskTotalTracks)
-      Settings.NV.DiskCurrentTrack++;
-    else
-      Settings.NV.DiskCurrentTrack = 1;
+  if(NV().DiskTotalTracks > 0) {
+    NV().DiskCurrentTrack = next_item(NV().DiskCurrentTrack, 1, NV().DiskTotalTracks);
   }
 }
 
 void SettingsClass::PrevRadioStation(void) {
-  if(NV.WebRadioTotalStations > 0) {
-    if(NV.WebRadioCurrentStation > 1)
-      NV.WebRadioCurrentStation--;
-    else
-      NV.WebRadioCurrentStation = NV.WebRadioTotalStations;
+  if(NV().WebRadioTotalStations > 0) {
+    NV().WebRadioCurrentStation = prev_item(NV().WebRadioCurrentStation, 1, NV().WebRadioTotalStations);
   }
 }
 
 void SettingsClass::NextRadioStation(void) {
-  if(NV.WebRadioTotalStations > 0) {
-    if (Settings.NV.WebRadioCurrentStation < Settings.NV.WebRadioTotalStations)
-      Settings.NV.WebRadioCurrentStation++;
-    else
-      Settings.NV.WebRadioCurrentStation = 1;
+  if(NV().WebRadioTotalStations > 0) {
+    NV().WebRadioCurrentStation = next_item(NV().WebRadioCurrentStation, 1, NV().WebRadioTotalStations);
   }
 }
 
 void SettingsClass::NextWaveform(void) {
-  NV.WaveformId = Validate(NV.WaveformId + 1, SET_WAVE_FORM_MIN, SET_WAVE_FORM_MAX);
+  NV().WaveformId = next_item(NV().WaveformId, SET_WAVE_FORM_MIN, SET_WAVE_FORM_MAX);
 }
 
 void SettingsClass::PrevWaveform(void) {
-  NV.WaveformId = Validate(NV.WaveformId - 1, SET_WAVE_FORM_MIN, SET_WAVE_FORM_MAX);
+  NV().WaveformId = prev_item(NV().WaveformId, SET_WAVE_FORM_MIN, SET_WAVE_FORM_MAX);
 }
 
 void SettingsClass::UpdateCurrentTrackTime(int adj) {
-  CurrentTrackTime = (int32_t)CurrentTrackTime + adj;
-  if(CurrentTrackTime >= 99 * 3600)
-    CurrentTrackTime = 0;
+  V().CurrentTrackTime = (int32_t)V().CurrentTrackTime + adj;
+  if(V().CurrentTrackTime >= 100 * 3600)
+    V().CurrentTrackTime = 0;
 }
 
 uint8_t SettingsClass::GetLogVolume(uint8_t v, uint8_t range) {
-  if(NV.VolumeSteps == 0) return range;
-  if(v > NV.VolumeSteps) v = NV.VolumeSteps;
-  int logvol = (int)range * (int)v * (int)v / (int)NV.VolumeSteps / (int)NV.VolumeSteps;
+  if(NV().VolumeSteps == 0) return range;
+  if(v > NV().VolumeSteps) v = NV().VolumeSteps;
+  int logvol = (int)range * (int)v * (int)v / (int)NV().VolumeSteps / (int)NV().VolumeSteps;
   return logvol > v ? logvol : v;
 }
 
 uint8_t SettingsClass::GetLinVolume(uint8_t v, uint8_t range) {
-  if(NV.VolumeSteps == 0) return range;
-  if(v > NV.VolumeSteps) v = NV.VolumeSteps;
-  int linvol = (int)range * (int)v / (int)NV.VolumeSteps;
+  if(NV().VolumeSteps == 0) return range;
+  if(v > NV().VolumeSteps) v = NV().VolumeSteps;
+  int linvol = (int)range * (int)v / (int)NV().VolumeSteps;
   return linvol > v ? linvol : v;
 }
 
@@ -456,10 +488,15 @@ SsidSettingsClass::SsidSettingsClass() {
   memset(this, 0, sizeof(SsidSettingsClass));
 }
 
+SsidSettingsClass::~SsidSettingsClass() { free(_credentials); }
+
 void SsidSettingsClass::EepromLoad(void) {
-  memset(this, 0, sizeof(SsidSettingsClass));
+  if(_credentials == NULL) {
+    _credentials = (wifi_credentials_t *)settings_calloc(SET_SSID_MAX+1, sizeof(wifi_credentials_t));
+  }
+  
   Settings.SetWireClock();
-  for(int i = 0; i < Settings.NV.TotalSsid; i++) {
+  for(int i = 0; i < Settings.NV().TotalSsid; i++) {
     Read24Cxx(EEPROM_SSID_PAGE,     i * EEPROM_SSID_SIZE + EEPROM_SSID_ADDRESS, _credentials[i].ssid, EEPROM_SSID_SIZE);
     Read24Cxx(EEPROM_PASSWORD_PAGE, i * EEPROM_PASSWORD_SIZE, _credentials[i].password, EEPROM_PASSWORD_SIZE);
   }
@@ -485,8 +522,7 @@ void SsidSettingsClass::EepromStore(int n, wifi_credentials_t &c) {
 }
 
 bool SsidSettingsClass::LoadFromCard(const char * filename) {
-  char fn[32];
-  
+  char fn[32]; // 32? No need to alloc in PSRAM
   Serial.printf("Reading \"%s\"", filename);
   if(strlen(filename) > sizeof(fn) - 1) {
     Serial.println(" failed, file name too long");
@@ -495,7 +531,7 @@ bool SsidSettingsClass::LoadFromCard(const char * filename) {
   
   if(!SD_BEGIN()) {
     Serial.println("Card Mount Failed, Cannot read SSID list");
-    Settings.NoCard = 1;
+    Settings.V().NoCard = 1;
     return false;
   }
 
@@ -507,31 +543,31 @@ bool SsidSettingsClass::LoadFromCard(const char * filename) {
     return false;
   }
   int n1, n2;
-  wifi_credentials_t wifi_credentials;
-  Settings.NV.TotalSsid = 0;
-  memset(&wifi_credentials, 0, sizeof(wifi_credentials_t));
+  wifi_credentials_t * wifi_credentials = (wifi_credentials_t *)settings_calloc(1, sizeof(wifi_credentials_t));
+  Settings.NV().TotalSsid = 0;
   Serial.print(": ");
   for (int i = 0; i <= SET_SSID_MAX; i++) {
-    n1 = SD_read_line(f, (char *)wifi_credentials.ssid, sizeof(wifi_credentials.ssid));
-    n2 = SD_read_line(f, (char *)wifi_credentials.password, sizeof(wifi_credentials.password));
+    n1 = SD_read_line(f, (char *)wifi_credentials->ssid, sizeof(wifi_credentials->ssid));
+    n2 = SD_read_line(f, (char *)wifi_credentials->password, sizeof(wifi_credentials->password));
     if (n1 && n2) {
-      EepromStore(Settings.NV.TotalSsid++, wifi_credentials);
+      EepromStore(Settings.NV().TotalSsid++, *wifi_credentials);
     }
   }
-  Serial.printf("Found %d SSIDs\n", Settings.NV.TotalSsid);
-  if (Settings.NV.CurrentSsid >= Settings.NV.TotalSsid)
-    Settings.NV.CurrentSsid = 0;
+  Serial.printf("Found %d SSIDs\n", Settings.NV().TotalSsid);
+  if (Settings.NV().CurrentSsid >= Settings.NV().TotalSsid)
+    Settings.NV().CurrentSsid = 0;
   Settings.EepromStore();
   f.close();
+  free(wifi_credentials);
   return true;
 }
 
 void SsidSettingsClass::Print(bool showpassword) { // For debug purposes
-  if(Settings.NV.TotalSsid == 0) {
+  if(Settings.NV().TotalSsid == 0) {
     Serial.println("No SSIDs Defined");
     return;
   }
-  for(int i = 0; i < Settings.NV.TotalSsid; i++) {
+  for(int i = 0; i < Settings.NV().TotalSsid; i++) {
     bool printable = isPrintable(_credentials[i].ssid[0]);
     Serial.printf("SSID: \"%s\", PASS: \"", printable ? (char *)_credentials[i].ssid : s_not_printable);
     if(showpassword) {
@@ -559,13 +595,14 @@ const char * SsidSettingsClass::GetSsid(int n, bool use_zero_length) {
 UrlSettingsClass::UrlSettingsClass() {
   _valid = 0;
   _ptr   = 0;
-  _index = 0;;
-  memset(_data, 0xFF, EEPROM_WEB_LIST_SIZE);
+  _index = 0;
+  _data = NULL;
 }
 
 void UrlSettingsClass::EepromLoad(void) {
   Settings.SetWireClock();
-  memset(_data, 0xFF, EEPROM_WEB_LIST_SIZE);
+  if(_data == NULL)
+    _data = (uint8_t *)settings_calloc(1, EEPROM_WEB_LIST_SIZE);
   Read24Cxx(EEPROM_WEB_ADDRESS, _data, EEPROM_WEB_LIST_SIZE);
   _valid = 1;
   Settings.RestoreWireClock();
@@ -575,8 +612,8 @@ void UrlSettingsClass::EepromStore(void) {
   // We must use page writes here.
   // Otherwise writing 7680 (when using 24C64) individual bytes,
   // will take at least 7680 * 5ms = 38 seconds
-  uint8_t buf[EEPROM_PAGE_SIZE];
-
+  uint8_t buf[EEPROM_PAGE_SIZE]; // Page size here is 32, so still no need to alloc in PSRAM
+  if(_data == NULL) return; 
   Settings.SetWireClock();
   for(int i = 0; i < EEPROM_WEB_LIST_SIZE; i += EEPROM_PAGE_SIZE) {
     int addr = i + EEPROM_WEB_ADDRESS;
@@ -586,11 +623,13 @@ void UrlSettingsClass::EepromStore(void) {
     }
   }
   Settings.RestoreWireClock();
- }
+}
  
 bool UrlSettingsClass::LoadFromCard(const char * filename) {
-  char fn[32];
-  
+  char fn[32]; // 32? No need to alloc in PSRAM
+
+  if(_data == NULL)
+    _data = (uint8_t *)settings_calloc(1, EEPROM_WEB_LIST_SIZE);
   Serial.printf("Reading \"%s\"", filename);
   if(strlen(filename) > sizeof(fn) - 1) {
       Serial.println(" failed, file name too long");
@@ -599,7 +638,7 @@ bool UrlSettingsClass::LoadFromCard(const char * filename) {
   
   if(!SD_BEGIN()) {
     Serial.println("Card Mount Failed, Cannot read station list");
-    Settings.NoCard = 1;
+    Settings.V().NoCard = 1;
     return false;
   }
 
@@ -613,19 +652,19 @@ bool UrlSettingsClass::LoadFromCard(const char * filename) {
   Serial.print(": ");
   int n;
   uint8_t buff[256];
-  Settings.NV.WebRadioTotalStations  = 0;
+  Settings.NV().WebRadioTotalStations  = 0;
   _ptr = _index = 0;
   while((n = SD_read_line(f, (char *)buff, sizeof(buff))) != 0) {
     n++; // We include the terminating zero
     if(_ptr + n <= EEPROM_WEB_LIST_SIZE) { // Check if it fits in the list
       memcpy(&_data[_ptr], buff, n);
       _ptr += n;
-      Settings.NV.WebRadioTotalStations++;
+      Settings.NV().WebRadioTotalStations++;
     }
   }
-  Serial.printf("Found %d stations, using %d bytes of %d in list.\n", Settings.NV.WebRadioTotalStations, _ptr, EEPROM_WEB_LIST_SIZE);
-  if (Settings.NV.WebRadioCurrentStation > Settings.NV.WebRadioTotalStations)
-    Settings.NV.WebRadioCurrentStation = 1;
+  Serial.printf("Found %d stations, using %d bytes of %d in list.\n", Settings.NV().WebRadioTotalStations, _ptr, EEPROM_WEB_LIST_SIZE);
+  if (Settings.NV().WebRadioCurrentStation > Settings.NV().WebRadioTotalStations)
+    Settings.NV().WebRadioCurrentStation = 1;
   EepromStore();
   Settings.EepromStore();
   _valid = 1;
@@ -637,13 +676,13 @@ void UrlSettingsClass::Print(bool raw) {
   uint16_t old_ptr   = _ptr;
   uint16_t old_index = _index;
   web_station_t stat;
-
-  if(Settings.NV.WebRadioTotalStations == 0 || !_valid) {
+  if(_data == NULL) return; 
+  if(Settings.NV().WebRadioTotalStations == 0 || !_valid) {
     Serial.println("No Radio URLs Defined");
     return;
   }
   _ptr = _index = 0;
-  for(int i = 0; i < Settings.NV.WebRadioTotalStations; i++) {
+  for(int i = 0; i < Settings.NV().WebRadioTotalStations; i++) {
     if(raw) {
       Serial.println(isPrintable(_data[_ptr]) ? (char *)&_data[_ptr] : s_not_printable);
     }
@@ -660,6 +699,7 @@ void UrlSettingsClass::Print(bool raw) {
 }
 
 void UrlSettingsClass::NextStation(void) {
+  if(_data == NULL) return; 
   if(isPrintable(_data[_ptr])) {
     _ptr += strlen((char *)&_data[_ptr]) + 1;
   }
@@ -667,6 +707,7 @@ void UrlSettingsClass::NextStation(void) {
 }
 
 void UrlSettingsClass::GetStation(web_station_t & web_station) {
+  if(_data == NULL) return; 
   if(!isPrintable(_data[_ptr])) {
     sprintf(web_station.name, "[%d]", _index + 1);
     web_station.namesize = strlen(web_station.name);
@@ -696,9 +737,10 @@ void UrlSettingsClass::GetStation(web_station_t & web_station) {
 }
 
 void UrlSettingsClass::GetStation(uint16_t idx, web_station_t & web_station) {
-  if(Settings.NV.WebRadioTotalStations > 0) {
+  if(_data == NULL) return; 
+  if(Settings.NV().WebRadioTotalStations > 0) {
     _ptr = _index = 0;
-    for(int i = 1; i < idx && i <= Settings.NV.WebRadioTotalStations; i++) {
+    for(int i = 1; i < idx && i <= Settings.NV().WebRadioTotalStations; i++) {
       NextStation();
       Settings.loop(); // Keep critical function running
     }
@@ -711,8 +753,9 @@ void UrlSettingsClass::GetStation(uint16_t idx, web_station_t & web_station) {
 //   - SettingsClass Settings instance must also be present
 //==========================================================
 
-bool TrackSettingsClass::LoadFromCard(bool keep_mounted) {
+bool TrackSettingsClass::LoadFromCard(const char * dir, bool keep_mounted) {
   if(_tracks == NULL) { 
+    #if 0
     if(psramFound()) {
       _list_max_size = SET_SD_TRACKS_PS_SIZE;
       _tracks = (uint8_t *)ps_malloc(SET_SD_TRACKS_PS_SIZE);
@@ -721,23 +764,28 @@ bool TrackSettingsClass::LoadFromCard(bool keep_mounted) {
       _list_max_size = SET_SD_TRACKS_SIZE;
       _tracks = (uint8_t *)malloc(SET_SD_TRACKS_SIZE);
     }
+    #else
+    _list_max_size = psramFound() ? SET_SD_TRACKS_PS_SIZE : SET_SD_TRACKS_SIZE;
+    _tracks = (uint8_t *)settings_malloc(_list_max_size);
+    #endif
   }
   memset(_tracks, 0, _list_max_size);
+  
   _number_of_tracks = 0;
   _list_size        = 0;
    
   if(!SD_BEGIN()) {
     Serial.println("Card Mount Failed, Cannot read track list");
-    Settings.NoCard = 1;
+    Settings.V().NoCard = 1;
     return false;
   }
-  Settings.NoCard = 0;
+  Settings.V().NoCard = 0;
   File _root;
   File _file;
   Serial.printf("Counting audio files ... ");
 //for(int ff = 0; ff <10; ff++) // test by 10x number of files
 {
-  _root = SD_OPEN("/");
+  _root = SD_OPEN(dir);
   if (!_root || !_root.isDirectory()) {
     Serial.println("failed to open root directory");
     return false;
@@ -764,9 +812,9 @@ bool TrackSettingsClass::LoadFromCard(bool keep_mounted) {
     Serial.printf("found %d audio files, (list memory usage %d of %d, average file name size %d)\n", _number_of_tracks, _list_size, _list_max_size, _list_size / _number_of_tracks);
   else
     Serial.println("no audio files found on card");
-  Settings.NV.DiskTotalTracks = _number_of_tracks;
-  if (Settings.NV.DiskCurrentTrack > Settings.NV.DiskTotalTracks) {
-    Settings.NV.DiskCurrentTrack = 1;
+  Settings.NV().DiskTotalTracks = _number_of_tracks;
+  if (Settings.NV().DiskCurrentTrack > Settings.NV().DiskTotalTracks) {
+    Settings.NV().DiskCurrentTrack = 1;
     Serial.println("Reset DiskCurrentTrack");
   }
   Settings.EepromStore();
@@ -776,7 +824,7 @@ bool TrackSettingsClass::LoadFromCard(bool keep_mounted) {
 }
 
 void TrackSettingsClass::Print(void) {
-  if(Settings.NoCard) {
+  if(Settings.V().NoCard) {
     Serial.println("No card found");
     return;
   }
@@ -800,7 +848,3 @@ const char * TrackSettingsClass::GetTrackName(uint16_t  n) {
   }
   return p;
 }
-
-#endif 
-
- 

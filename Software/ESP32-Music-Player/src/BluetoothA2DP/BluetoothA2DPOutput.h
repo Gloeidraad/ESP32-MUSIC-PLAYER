@@ -24,14 +24,20 @@ class BluetoothA2DPOutput {
   virtual bool begin() = 0;
   virtual size_t write(const uint8_t *data, size_t len) = 0;
   virtual void end() = 0;
-  virtual void set_sample_rate(int rate);
-  virtual void set_output_active(bool active);
+  virtual void set_sample_rate(int rate) = 0;
+  virtual void set_output_active(bool active) = 0;
+
+  virtual void write_silence(size_t len) {
+    uint8_t silence[64] = {};
+    for (size_t i = 0; i < len; i += sizeof(silence))
+      write(silence, std::min(sizeof(silence), len - i));
+  }
 
 #if A2DP_I2S_AUDIOTOOLS
   /// Not implemented
-  virtual void set_output(AudioOutput &output) {}
+  virtual void set_output(audio_tools::AudioOutput &output) {}
   /// Not implemented
-  virtual void set_output(AudioStream &output) {}
+  virtual void set_output(audio_tools::AudioStream &output) {}
 #endif
 
 #ifdef ARDUINO
@@ -75,19 +81,25 @@ class BluetoothA2DPOutputAudioTools : public BluetoothA2DPOutput {
   void set_sample_rate(int rate) override;
   void set_output_active(bool active) override;
 
-  operator bool() { return p_print != nullptr; }
+  operator bool() { 
+#if A2DP_I2S_AUDIOTOOLS || defined(ARDUINO)
+    return p_print != nullptr; 
+#else
+    return false;
+#endif
+  }
+
 
 #if A2DP_I2S_AUDIOTOOLS
-
   /// Output AudioStream using AudioTools library
-  void set_output(AudioOutput &output) {
+  void set_output(audio_tools::AudioOutput &output) {
     p_print = &output;
     p_audio_print = &output;
   }
 
   /// Output AudioStream using AudioTools library
-  void set_output(AudioStream &output) {
-    static AdapterAudioStreamToAudioOutput adapter(output);
+  void set_output(audio_tools::AudioStream &output) {
+    static audio_tools::AdapterAudioStreamToAudioOutput adapter(output);
     adapter.setStream(output);
     p_print = &output;
     p_audio_print = &adapter;
@@ -100,14 +112,48 @@ class BluetoothA2DPOutputAudioTools : public BluetoothA2DPOutput {
 #endif
 
  protected:
-#if defined(ARDUINO) || defined(A2DP_I2S_AUDIOTOOLS)
+#if defined(ARDUINO) || A2DP_I2S_AUDIOTOOLS
   Print *p_print = nullptr;
 #endif
 
 #if A2DP_I2S_AUDIOTOOLS
-  AudioOutput *p_audio_print = nullptr;
+  audio_tools::AudioOutput *p_audio_print = nullptr;
 #endif
 };
+
+#ifdef ARDUINO
+
+/**
+ * @brief Output Class using Print API:
+ * @author Phil Schatzmann
+ * @copyright Apache License Version 2
+ */
+
+class BluetoothA2DPOutputPrint : public BluetoothA2DPOutput {
+ public:
+  BluetoothA2DPOutputPrint() = default;
+  bool begin() { return true;};
+  size_t write(const uint8_t *data, size_t len) override { 
+    if (p_print==nullptr) return 0;
+    return p_print->write(data, len);
+  }
+  void end() override {}
+  void set_sample_rate(int rate) override {};
+  void set_output_active(bool active) override {};
+
+  operator bool() { 
+    return p_print != nullptr; 
+  }
+
+  /// Output to Arduino Print
+  void set_output(Print &output) { p_print = &output; }
+
+ protected:
+  Print *p_print = nullptr;
+
+};
+#endif
+
 
 /**
  * @brief Legacy I2S Output Class
@@ -204,9 +250,9 @@ class BluetoothA2DPOutputDefault : public BluetoothA2DPOutput {
 
 #if A2DP_I2S_AUDIOTOOLS
   /// Output AudioStream using AudioTools library
-  void set_output(AudioOutput &output) override  { out_tools.set_output(output); }
+  void set_output(audio_tools::AudioOutput &output) override  { out_tools.set_output(output); }
   /// Output AudioStream using AudioTools library
-  void set_output(AudioStream &output) override { out_tools.set_output(output); }
+  void set_output(audio_tools::AudioStream &output) override { out_tools.set_output(output); }
 #endif
 
 #ifdef ARDUINO
