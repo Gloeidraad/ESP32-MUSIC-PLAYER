@@ -162,6 +162,9 @@ SET_LOOP_TASK_STACK_SIZE(16*1024 ); // 16KB; default = 8kB;
 // https://github.com/dmody/ESP-32-Heap-Watchdog-Reliability/tree/main
 
 void setup() {
+  #ifdef I2C_PORT_OLED
+    bool oled_i2c_present = false;
+  #endif
   Serial.begin(SERIAL_BAUD_RATE);  // 1000000 (defined in Board.h)
   delay(1000);
 
@@ -170,11 +173,21 @@ void setup() {
   pinMode(PIN_DC, OUTPUT);
   digitalWrite(PIN_CS, HIGH);
   digitalWrite(PIN_DC, HIGH);
-  SPI_PORT_OLED.begin(PIN_SCLK, PIN_MISO, PIN_MOSI);
-  SPI_PORT_OLED.setFrequency(SPI_OLED_CLOCK_SPEED);
   Serial.printf("Arduino Loop Task Stack Size = %d\n", getArduinoLoopTaskStackSize());
   I2C_PORT_EEPROM.begin(PIN_SDA1, PIN_SCL1, I2C_LOW_CLOCK_SPEED);
   I2C_PORT_EEPROM.setBufferSize(256 + 8);
+  #ifdef I2C_PORT_OLED
+    I2C_PORT_OLED.begin(PIN_SDA2, PIN_SCL2, I2C_HIGH_CLOCK_SPEED);
+    oled_i2c_present = Scan_I2C_Device(I2C_PORT_OLED, OLED_I2C_ADDRESS);
+    if(oled_i2c_present) {
+      Serial.printf("OLED on I2C bus at address 0x%02X found.\n", OLED_I2C_ADDRESS); 
+      I2C_PORT_OLED.setBufferSize(256 + 8);
+    }
+  #endif
+  #ifdef SPI_PORT_OLED
+    SPI_PORT_OLED.begin(PIN_SCLK, PIN_MISO, PIN_MOSI);
+    SPI_PORT_OLED.setFrequency(SPI_OLED_CLOCK_SPEED);
+  #endif
   // Buttons
   uint8_t  BootKeys = 0;
   if(digitalRead(PIN_SW1) == LOW) BootKeys |= BOOT_KEY1_MASK;
@@ -189,7 +202,15 @@ void setup() {
   }
   Settings.EepromLoad(true);    // Get the primary settings from EEPROM
   Settings.V().BootKeys = BootKeys;
-  Display.Initialize(Settings.isSoftRestart(), true);
+  #if OLED_DUAL_TARGET_PORT == 1
+    Display.Initialize(Settings.isSoftRestart(), !oled_i2c_present);
+  #else
+    #ifdef I2C_PORT_OLED
+      Display.Initialize(Settings.isSoftRestart(), false);
+    #else
+      Display.Initialize(Settings.isSoftRestart(), true);
+    #endif
+  #endif
   SW2.attachClick(SW2_HandleClick);
   SW2.attachLongPressStart(SW2_HandleLongClick);
   SW3.attachClick(SW3_HandleClick);
