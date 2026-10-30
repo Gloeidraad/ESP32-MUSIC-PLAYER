@@ -114,7 +114,7 @@ void SimpleWaveGeneratorClass::CreateDacTestMax(samples_t * dest, int samples) {
   _use_psram                 = use_psram;
   _dac_adjust                = 0;
 
-  #if ESP_IDF_VERSION_MAJOR == 5
+  #if ESP_IDF_VERSION_MAJOR >= 5
     memset(&_i2s_chan_cfg, 0, sizeof(i2s_chan_config_t));
     _i2s_chan_cfg.id                 = _i2s_port;
     _i2s_chan_cfg.role               = I2S_ROLE_MASTER;        // I2S controller master role, bclk and lrc signal will be set to output
@@ -167,7 +167,7 @@ void SimpleWaveGeneratorClass::CreateDacTestMax(samples_t * dest, int samples) {
 SimpleWaveGeneratorClass::~SimpleWaveGeneratorClass() {
   _pause = true;
   if(_i2s_installed) {
-    #if ESP_IDF_VERSION_MAJOR == 5
+    #if ESP_IDF_VERSION_MAJOR >= 5
       i2s_channel_disable(_i2s_tx_handle);
       delay(100);
       i2s_del_channel(_i2s_tx_handle);
@@ -187,7 +187,7 @@ void SimpleWaveGeneratorClass::Init(i2s_port_t port) {
     _samples = (samples_t *)wavegen_calloc(NUMBER_OF_SAMPLES_MAX, sizeof(samples_t));
   }
   if(!_i2s_installed) {
-    #if ESP_IDF_VERSION_MAJOR == 5
+    #if ESP_IDF_VERSION_MAJOR >= 5
       _i2s_chan_cfg.id = _i2s_port;
       i2s_new_channel(&_i2s_chan_cfg, &_i2s_tx_handle, NULL);
       i2s_channel_init_std_mode(_i2s_tx_handle, &_i2s_std_cfg);
@@ -242,7 +242,7 @@ void SimpleWaveGeneratorClass::Start(int waveform, bool autoplay) {
   bool cur_pause = _pause;
   _pause = true;
   if(!CreateWaveform(waveform)) return; // Not a valid waveform, so exit without install.
-  #if ESP_IDF_VERSION_MAJOR == 5
+  #if ESP_IDF_VERSION_MAJOR >= 5
     i2s_channel_disable(_i2s_tx_handle);
     _i2s_std_cfg.clk_cfg.sample_rate_hz = _current_sample_rate;
     i2s_channel_reconfig_std_clock(_i2s_tx_handle, &_i2s_std_cfg.clk_cfg);
@@ -259,7 +259,7 @@ void SimpleWaveGeneratorClass::Start(int waveform, bool autoplay) {
 void SimpleWaveGeneratorClass::loop(void) {
   if(_current_wave_form >= 0 && !_pause) { 
     size_t BytesWritten; 
-    #if ESP_IDF_VERSION_MAJOR == 5
+    #if ESP_IDF_VERSION_MAJOR >= 5
       i2s_channel_write(_i2s_tx_handle, _samples, _current_number_of_samples * sizeof(samples_t), &BytesWritten, portMAX_DELAY);
     #else
       i2s_write(_i2s_port, _samples, _current_number_of_samples * sizeof(samples_t), &BytesWritten, portMAX_DELAY );

@@ -16,8 +16,11 @@
 // You can pause the player with:
 //   WaveGenerator.Pause();
 
-#if ESP_IDF_VERSION_MAJOR == 5
+#if ESP_IDF_VERSION_MAJOR >= 5
   #include <driver/i2s_std.h>  // Library of I2S routines, comes with ESP32 standard install
+  #if ESP_IDF_VERSION_MAJOR >= 6
+    #define i2s_port_t int
+  #endif
 #else
   #include <driver/i2s.h>      // Library of legacy I2S routines, comes with ESP32 standard install
 #endif
@@ -79,7 +82,7 @@ class SimpleWaveGeneratorClass {
     uint8_t  _use_lsbj;
     uint8_t  _use_psram;
     samples_t * _samples;
-    #if ESP_IDF_VERSION_MAJOR == 5
+    #if ESP_IDF_VERSION_MAJOR >= 5
       i2s_chan_handle_t _i2s_tx_handle;
       i2s_chan_config_t _i2s_chan_cfg; // stores I2S channel values
       i2s_std_config_t  _i2s_std_cfg;  // stores I2S driver values
